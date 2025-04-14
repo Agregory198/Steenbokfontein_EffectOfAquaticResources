@@ -6,9 +6,8 @@ execute:
   echo: false
   warning: false
   message: false
-format: html
+format: docx
 editor: visual
-prefer-html: true
 ---
 
 ```{r library}
@@ -752,7 +751,12 @@ sbf_df |>
   mutate(Layer = ifelse(Layer %in% c("3a", "3b"), "3", Layer)) |>
   group_by(Layer) |>
   summarize(Tool_sum = sum(Count)) |>
-  mutate(Lithic_Dens = c(8.8, 11.7, 16, 30.7, 18.7)) |>
+  mutate(Lithic_Dens = c(8.8, 11.7, 16, 30.7, 18.7),
+         Dep_rate = abs(c(((2.45+2)/2)-((2.6+2.2)/2),
+                      ((2.6+2.2)/2)-((3+2.4)/2),
+                      ((3+2.4)/2)-((3.5+2.7)/2),
+                      ((3.5+2.7)/2)-((5+3)/2),
+                      ((5+3)/2)-(4.6)))) |>
   left_join(
     
     sbf_un |>
@@ -762,18 +766,19 @@ sbf_df |>
       summarize(Deb_sum = sum(Count)) 
     
 ) |>
-  mutate(Tool_Perc = (Tool_sum/Deb_sum)*100) |>
+  mutate(Tool_Perc = (Tool_sum/Deb_sum)*100,
+         Lithic_std = Lithic_Dens/Dep_rate) |>
   
-  ggplot(aes(x = Lithic_Dens, y = Tool_Perc, color = Layer, label = Layer))+
+  ggplot(aes(x = Lithic_std, y = Tool_Perc, color = Layer, label = Layer))+
   geom_point(size = 2)+
   geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
-  xlab("Lithic Density")+ylab("Formal Tool Percent")+
+  xlab("Lithic Density/Deposition Rate")+ylab("Formal Tool Percent")+
   theme_minimal()+
   guides(color = "none")+
   scale_color_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-                                "4a" = "forestgreen", "4b" = "forestgreen"))+
-  annotate(geom = "text", x = 28, y = 5.2, label = "Lower Mobility")+
-  annotate(geom = "text", x = 12, y = 8.8, label = "Higher Mobility")
+                                "4a" = "forestgreen", "4b" = "forestgreen"))
+  #annotate(geom = "text", x = 63, y = 5.2, label = "Lower Mobility")+
+  #annotate(geom = "text", x = 25, y = 8.8, label = "Higher Mobility")
 ```
 
 ## Flake utility and reduction intensity
@@ -970,7 +975,7 @@ scrap.red <- scrap.red |>
          MASS = df.scrap$MASS)
 ```
 
-```{r fig-Figure10}
+```{r fig-Figure10, fig.cap="Scraper utility to retouch intensity for all scrapers at SBF colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure shows the opposite pattern than we would expect."}
 scrap.red |>
   group_by(STRAT) |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
