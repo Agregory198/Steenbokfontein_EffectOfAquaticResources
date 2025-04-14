@@ -1,0 +1,982 @@
+---
+title: "Steenbokfontein Preliminary Results"
+bibliography: references.bib
+link-citations: true
+execute: 
+  echo: false
+  warning: false
+  message: false
+format: html
+editor: visual
+prefer-html: true
+---
+
+```{r library}
+#| warning: false
+#| message: false
+
+
+# To plot figures
+library(ggplot2)
+library(forcats)
+library(ggpubr)
+library(ggridges)
+library(cowplot)
+
+library(infer)
+
+library(viridis)
+
+library(scales)
+library(stringr)
+
+# To generate tables
+library(gtsummary)
+library(gt)
+library(broom)
+library(broom.mixed)
+
+library(stargazer)
+library(kableExtra)
+
+# To tidy the data
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(tidybayes)
+
+# Bayesian models
+library(brms)
+library(emmeans)
+```
+
+```{r ScraperRetouchFormula}
+# Calculate scraper retouch intensity
+scraper_red <- function(L, D, a, b){
+  
+  t = D * sin(a)
+  D3 = D * cos(a)
+  D1 = t/(sin(b))
+  D4 = (t * cos(b))/(sin(b))
+  
+  D2 = D4 - D3
+  
+  B = t * (sin(b)) # define base B to find height (which is also D1)
+  
+  h = sin(b) * ((t*(cos(b)/sin(b))) - (D*cos(a)))
+  
+  A =  0.5 * B * h# find values of area now
+  
+  RE = L*((D^2)/2)*((sin(a*(pi/180))^2 * 
+                       (cos(b*(pi/180))/sin(b*(pi/180)))) - 
+                      (sin(a*(pi/180)) * cos(a*(pi/180))))
+  
+  
+  output <- tibble(Reduction = RE)
+  
+  return(output)
+  
+  
+}
+```
+
+```{r ReadData}
+# Read and clean data
+df <- read.csv("AG_Summer2024_06_26_Final.csv") |>
+  filter(RAWMATERIAL != "BWA UPPER 1" &
+           RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
+                        ifelse(STRAT == "3b", "3", STRAT)),
+         STRAT_mod = ifelse(STRAT %in% c("4a", "4b"), "Terrestrial", "Coastal")) |>
+  mutate(STRAT = factor(STRAT),
+         STRAT_mod = factor(STRAT_mod),
+         RAWMATERIAL = factor(RAWMATERIAL))
+
+# take average core flake scar length
+df |>
+  dplyr::filter(ARTIFACTCLASS=="Core") |>
+  group_by(RAWMATERIAL)|>
+  dplyr::summarise(a = mean(LENGHTLONGESTFLAKESCAR)) -> df.core_average
+
+# Subset data by flakes and flake variables
+df.flakes <- df |>
+  filter(ARTIFACTCLASS == "Flake" & COMPLETENESS == "Complete") |>
+  select(1:11,33:35,38,48:53,64:69,STRAT_mod)|>
+  mutate(TECHLENGTH = as.numeric(TECHLENGTH),
+         Utility = MAXWIDTH*MAXLENGTH,
+         Reduction = ifelse(
+           RAWMATERIAL == "Opaline/CCS", 
+          TECHLENGTH/df.core_average$a[which(df.core_average == "Opaline/CCS")],
+                      ifelse(RAWMATERIAL == "Quartz", 
+          TECHLENGTH/df.core_average$a[which(df.core_average == "Quartz")],
+                       ifelse(RAWMATERIAL == "Quartzite", 
+          TECHLENGTH/df.core_average$a[which(df.core_average == "Quartzite")],
+                              TECHLENGTH/17.70))))
+
+# Subset data by cores and core variables
+df.cores <- df |>
+  filter(ARTIFACTCLASS == "Core" & CORECOMPLETENESS == "Complete") |>
+  select(1:10,13,54:69) |>
+  mutate(SA_Ellipse = (4*pi)*
+           ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
+           (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
+           (((MAXWIDTH/2)+(MAXTHICKNESS/2))^1.6075))/3)^(1/1.6075)))
+
+# Subset data by retouch and retouch variables
+df.retouch <- df |>
+  filter(ARTIFACTCLASS == "RetouchedTool" & RAWMATERIAL != "BWA UPPER 1" &
+           COMPLETENESS == "Complete") |>
+  select(1:11,13:32,36:47,64:69)
+
+# Read tabulated data from previous publications (i.e. Jerardino & Yates)
+sbf_df <- read.csv("SBF_ToolType.csv")
+sbf_un <- read.csv("SBF_ToolType_unmod.csv")
+```
+
+# Methods
+
+Here, we examine whether hunter-gatherer technological strategies changed as they increased their focus on coastal resources at Steenbokfontein (SBF). To accomplish this, we examine 1) raw material distribution and surplus, 2) lithic tool utility and reduction intensity, and 3) retouch intensity. These data inform us about where hunter-gatherers procured, transported, maintained, and discarded their lithic technology. Technological changes between coastal and terrestrial layers imply that hunter-gatherer coastal adaptations at SBF fundamentally changed their technological strategies.
+
+## Raw material and toolkit composition
+
+Toolkit composition refers to the raw material distribution, surplus, and relationship between cores, flakes, and retouched tools. Raw material distribution and surplus are both directly linked to where hunter-gatherers procure, transport, and reduce their lithic tools [@andrefsky1994; @andrefsky2009; @binford; @dibble2005; @kuhn1992; @kuhn1994; @nelson1991]. Shifts in local and non-local raw materials can inform us about changes in hunter-gatherer mobility patterns [@andrefsky1994; @kelly1983] . For instance, a reduction in non-local raw material may imply reduced hunter-gatherer movement across the landscape [@kelly1992]. To evaluate this pattern, we examine changes in the proportion of raw material over time at SBF. Shifts in raw material distribution and reduced mobility will likely reflect the amount of surplus hunter-gatherers store at SBF [@surovell2009].
+
+We use the relative size of lithics to evaluate whether raw material surplus changes between layers associated with coastal and terrestrial resource use [see @mackay2009] . Firstly, we extract the 50th and 75th percentile of lithic mass for layers associated with coastal resource use and terrestrial resource use. Then, for each raw material, we contrast these percentiles against 1) all lithic mass, 2) only core mass, and 3) maximum core length. If the average mass or length intersect the 75th percentile, then there is more raw material surplus than we would expect in that layer. If the average mass or length is at the 50th percentile, then this reflects the average expectation for the layer. If the average mass or length fall below the 50th percentile, then this reflects less raw material surplus than we would expect. As hunter-gatherers focus on coastal resources, we expect raw material surplus to increase.
+
+We can also use lithic density, number of flakes, cores, and retouched tools to explore the composition of toolkits. Changes in the frequency of flakes, cores, and retouched tools can inform us about mobility strategies and allude to site function [@kelly1988; @kelly1992; @nelson1991] . For instance, an emphasis in retouched tools over flake production can suggest hunter-gatherer groups with higher mobility and a site that may be associated with logistical foraging patterns. Greater frequency of cores and flake production can reflect lower mobility and sites associated with residential patterns [@barton; @binford; @kelly1992]. To evaluate whether the composition of hunter-gatherer toolkits change as they focus on coastal resources, we look at 1) percent of retouched tools to lithic density, 2) retouched flakes-to-unmodified flakes, and 3) retouched flakes-to-cores.
+
+## Lithic tool utility and reduction intensity
+
+Surovell [-@surovell2009] and Kuhn [-@kuhn1994] explain lithic utility as the remaining portion of the lithic that can still be reduced. They define lithic utility for flakes ($f_u$) and retouched tools ($f_u$) as:
+
+$$
+f_u=l*(l-m)
+$$
+
+where *l* is the length of the tool and *m* is the *slug*, or the smallest usable length for the tool. We define core utility ($c_u$) as the total volume remaining that could be reduced further. We use this equation to estimate flake and retouched tool utility at SBF. However, since there are increasing occurrences of *microlithic* technologies in Africa and Europe that are measured less than one centimeter [e.g. @ambrose2002; @belfer-cohen2002; @hiscock2015; @mitchell1988; @pargeter2016] , subtracting by the *slug* is likely negligible.
+
+We define core utility as the remaining volume. Use the formula for an ellipse to estimate the remaining core volume at SBF [see @dibble2005]:
+
+$$
+c_u=\pi*\frac{4}{3}*a*b*c
+$$
+
+where *a*, *b*, and *c* the semi-axis measurements for the maximum length, width, and thickness.
+
+We adopt Lombao et al.'s [-@lombao2020; -@lombao2023] definition for reduction intensity as the amount of total volume removed from a core or tool. Previous studies have used several distinct metrics to quantify the degree of reduction intensity including volumetric reconstruction [@lombao2020; @lombao2023], scar density index (SDI) [@clarkson2013] , and a comparison between core and flake size. To compute the general reduction intensity for SBF, we average each core's maximum flake scar and subtract this by each flake's technological length. We then contrast this value against flake utility. For cores, we estimate the amount of volume removed from each core via Lombao et al.'s [-@lombao2020; -@lombao2023] volumetric reconstruction. We then contrast this against the remaining core utility. From here, we can measure changes in lithic utility, reduction intensity, and the interaction between utility and reduction intensity through SBF.
+
+## Retouch intensity
+
+### Flakes
+
+For retouched flakes, we contrast the remaining utility against the retouch intensity. To compute retouch invasiveness, we combine three different metrics: edge-to-flake thickness, the number of regions that shows retouch, and retouch invasiveness [@clarkson2002; @surovell2009]. We multiply these together to estimate the degree of flake retouch intensity. Edge-to-flake thickness is the ratio between the edge thickness and maximum tool thickness. For the number of regions, we segregated the flake into eight equal segments and counted how many of the eight segments contained retouch scars. Lastly, retouch invasiveness is the degree in which the retouched flake scars protruded towards the center of the flake [e.g., @clarkson2002]. Flake scars contained to the margins were given a score of 0.5 and the flake scars towards the center were given a score of 1. We averaged these scores for each of the eight regions to get an invasiveness score. Then, we were able to contrast the flake utility against the combined metric for retouch intensity.
+
+### Scrapers
+
+Scrapers are the most abundant retouched tool at SBF and so, we explore how the utility and retouch intensity changes between layers associated with coastal and terrestrial resources. We use the same utility measurement described above to calculate scraper utility. Since all scrapers are unifacial, we adopt Eren et al.'s [-@eren2005; see also @kuhn1990] approach to quantify the retouch intensity of unifacial tools (*V*). To accomplish this, we apply their geometric equation to all scrapers at SBF:
+
+$$
+V = \frac{L D^2}{2} \left( \sin^2(a) \cot(b) - \sin(a) \cos(a) \right)
+$$
+
+where *L* is the length of the retouched edge, *D* is the retouched length, *a* is the retouched angle, and *b* is the angle where the central and dorsal planes meet. With these metrics, we can measure shifts in scraper utility and retouch intensity through time at SBF.
+
+# Results
+
+## Raw material distribution
+
+Table 1 and @fig-Figure1 show the distribution of artifact type by raw material. @fig-Figure1 shows the raw material distribution by individual layer and lumped into layers associated with coastal (layers 1-3) and terrestrial diets (layers 4a and 4b). These data suggest that, as hunter-gatherer focus on coastal resources, there is a decrease in the proportion of retouched tools for all raw materials and increase in cores (@fig-Figure1 (a)) . @fig-Figure1 (b) shows a more nuanced raw material pattern. As silcrete cores decrease towards layer 2, there is an increase in quartzite cores. At the same time, silcrete and quartz retouched tools increase during layer 2. Additionally, table 1 shows a general decrease in silcrete materials through SBF, implying hunter-gatherers reduced the amount of silcrete brought into SBF. Together, these patterns reflect shifts in hunter-gatherer toolkits and raw material transportation when diets become centered around coastal foods.
+
+An analysis of cortical-to-noncortical flakes (@fig-Figure2) further implies significant shifts in raw material transport. @fig-Figure2 (a) shows that silcrete has the lowest cortical-to-noncortical ratios for layers associated with terrestrial diets, suggesting greater cortical silcrete. As hunter-gatherers focused on coastal resources, silcrete reflects similar ratios for quartz and quartzite. @fig-Figure2 (b) shows a general decrease in quartz ratios through SBF, implying a greater proportion of non-cortical quartz flakes through time. These shifts in cortical-to-noncortical ratios confirm that hunter-gatherer modified where they procured raw material and where, on the landscape, they removed cortical pieces before transporting them into SBF.
+
+```{r tab.cap="Count and percentage of the three main lithic categories conditioned by raw material: Cores, Flakes, and Retouched tools. Retouched tool categories contains miscelleneous retouched flakes, backed tools, and scrapers."}
+#| label: tab-one
+
+
+# Create summary table
+
+df |>
+  select(STRAT, RAWMATERIAL, ARTIFACTCLASS) |>
+  mutate(ARTIFACTCLASS = ifelse(ARTIFACTCLASS ==
+                                  "RetouchedTool", "Retouched tools", ARTIFACTCLASS),
+         RAWMATERIAL = 
+           fct_relevel(RAWMATERIAL,
+                       "Quartz", "Quartzite", "Silcrete")) |>
+  rename(Layer = STRAT,
+         `Artifact class` = ARTIFACTCLASS) |>
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  tbl_strata(
+    strata = RAWMATERIAL,
+    .tbl_fun =
+      ~ .x |>
+        tbl_summary(by = "Artifact class", missing = "no") |> add_n()
+  ) |>
+  modify_header(label = "") -> tab1
+tab1
+```
+
+```{r RMGGplot}
+
+df |>
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  group_by(STRAT, RAWMATERIAL, ARTIFACTCLASS) |>
+  summarize(Freq = n()) |>
+  mutate(cs = sum(Freq),
+         prop = Freq/cs) |>
+  ggplot(aes(x = STRAT, y = prop, fill = ARTIFACTCLASS))+
+  geom_col()+
+  facet_wrap(~RAWMATERIAL)+
+  labs(fill = "",
+       x = "Layer",
+       y = "Proportion") +
+  theme_minimal()+
+  scale_fill_viridis_d()+
+  theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2)))) -> RM_plot1
+
+df |>
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  mutate(STRAT_mod = ifelse(STRAT %in% c("4a", "4b"), "Terrestrial", "Coastal")) |>
+  group_by(STRAT_mod, RAWMATERIAL, ARTIFACTCLASS) |>
+  summarize(Freq = n()) |>
+  mutate(cs = sum(Freq),
+         prop = Freq/cs) |>
+  ggplot(aes(x = STRAT_mod, y = prop, fill = ARTIFACTCLASS))+
+  geom_col()+
+  facet_wrap(~RAWMATERIAL)+
+  labs(fill = "",
+       x = "Grouped Layers",
+       y = "Proportion") +
+  theme_minimal()+
+  scale_fill_viridis_d()+
+  theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",1),rep("Forest Green",1)),
+                       angle = 45, hjust = 1)) -> RM_plot2
+
+```
+
+```{r fig-Figure1, fig.cap="Proportion of three main lithic tool types (cores, flakes, and retouched tools) conditioned by raw material type for layers grouped by diet (A) and all layesr (B). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+
+ggarrange(
+  RM_plot2, RM_plot1,
+  align = "h", labels = c("A", "B"),
+  common.legend = TRUE
+)
+```
+
+```{r CortexGGplot}
+#| warning: false
+#| message: false
+
+# calculate the cortical to noncortical ratio based on percent of cortex and artifact surface area
+iter = 100
+df_cortex_boot <- tibble(STRAT = character(),
+                         ratio = numeric(),
+                         RAWMATERIAL = character(),
+                         sample = numeric())
+set.seed(1234567890)
+for(i in 1:iter){
+df |>
+  mutate(SA = ifelse(ARTIFACTCLASS == "Core", (4*pi)*
+           ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
+           (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
+           (((MAXWIDTH/2)+(MAXTHICKNESS/2))^1.6075))/3)^(1/1.6075)),
+           MAXLENGTH*MAXWIDTH),
+         
+         cortical = ifelse(CORTEX == "0%", 0,
+                           ifelse(CORTEX == "10-40%", 0.2,
+                                  ifelse(CORTEX == "1-10", 0.05,
+                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+         
+         C_SA = SA*cortical) |>
+  mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
+  select(STRAT, RAWMATERIAL, SA, C_SA, NC_SA, cortical) |>
+  slice_sample(n = nrow(df), replace = T) |>
+  filter(SA < 2000) |>
+  group_by(STRAT, RAWMATERIAL) |>
+  summarize(cortical_sum = sum(C_SA),
+            noncortical_sum = sum(NC_SA),
+            ratio = cortical_sum/noncortical_sum,
+            sample = i) |>
+  select(ratio, RAWMATERIAL, sample) -> df_cortex
+  
+  df_cortex_boot <- rbind(df_cortex, df_cortex_boot)
+}
+
+
+# Compute cortical to noncortical ratio from empirical data
+df_emp_cortex <- df |>
+    mutate(SA = ifelse(ARTIFACTCLASS == "Core", (4*pi)*
+           ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
+           (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
+           (((MAXWIDTH/2)+(MAXTHICKNESS/2))^1.6075))/3)^(1/1.6075)),
+           MAXLENGTH*MAXWIDTH),
+         
+         cortical = ifelse(CORTEX == "0%", 0,
+                           ifelse(CORTEX == "10-40%", 0.2,
+                                  ifelse(CORTEX == "1-10", 0.05,
+                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+         
+         C_SA = SA*cortical) |>
+  mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
+  filter(SA < 2000) |>
+  group_by(STRAT, RAWMATERIAL) |>
+  summarize(cortical_sum = sum(C_SA),
+            noncortical_sum = sum(NC_SA),
+            ratio = cortical_sum/noncortical_sum)
+  
+  
+  
+# Plot cortical to noncortical ratios with error bars from bootstrap data
+df_cortex_boot |>
+  group_by(RAWMATERIAL, STRAT) |>
+  summarise(lower_CI = quantile(ratio, 0.025),
+            upper_CI = quantile(ratio, probs = 0.975),
+            median = quantile(ratio, probs = 0.5))|>
+  ggplot(aes(x = STRAT, y = median, fill = RAWMATERIAL))+
+  geom_bar(data = df_emp_cortex, aes(x = STRAT, y = ratio, fill = RAWMATERIAL),
+           stat = "identity", position = "dodge")+
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI, colour = "grey"),
+                position = "dodge")+
+  labs(fill = "",
+       x = "Layer",
+       y = "Cortical-to-Noncortical Ratios") +
+  theme_minimal()+
+  guides(colour = "none")+
+  scale_fill_viridis_d()+
+  theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2)))) -> cort_plot1
+  
+################## Bootstrap for modified Strats #####################
+iter = 100
+df_cortex_boot <- tibble(STRAT_mod = character(),
+                         ratio = numeric(),
+                         RAWMATERIAL = character(),
+                         sample = numeric())
+set.seed(234567890)
+for(i in 1:iter){
+df |>
+  mutate(SA = ifelse(ARTIFACTCLASS == "Core", (4*pi)*
+           ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
+           (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
+           (((MAXWIDTH/2)+(MAXTHICKNESS/2))^1.6075))/3)^(1/1.6075)),
+           MAXLENGTH*MAXWIDTH),
+         
+         cortical = ifelse(CORTEX == "0%", 0,
+                           ifelse(CORTEX == "10-40%", 0.2,
+                                  ifelse(CORTEX == "1-10", 0.05,
+                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+         
+         C_SA = SA*cortical) |>
+  mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
+  select(STRAT_mod, RAWMATERIAL, SA, C_SA, NC_SA, cortical) |>
+  slice_sample(n = nrow(df), replace = T) |>
+  filter(SA < 2000) |>
+  group_by(STRAT_mod, RAWMATERIAL) |>
+  summarize(cortical_sum = sum(C_SA),
+            noncortical_sum = sum(NC_SA),
+            ratio = cortical_sum/noncortical_sum,
+            sample = i) |>
+  select(ratio, RAWMATERIAL, sample) -> df_cortex
+  
+  df_cortex_boot <- rbind(df_cortex, df_cortex_boot)
+}
+
+# Compute cortical to noncortical ratio from empirical data
+df_emp_cortex <- df |>
+    mutate(SA = ifelse(ARTIFACTCLASS == "Core", (4*pi)*
+           ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
+           (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
+           (((MAXWIDTH/2)+(MAXTHICKNESS/2))^1.6075))/3)^(1/1.6075)),
+           MAXLENGTH*MAXWIDTH),
+         
+         cortical = ifelse(CORTEX == "0%", 0,
+                           ifelse(CORTEX == "10-40%", 0.2,
+                                  ifelse(CORTEX == "1-10", 0.05,
+                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+         
+         C_SA = SA*cortical) |>
+  mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
+  filter(SA < 2000) |>
+  group_by(STRAT_mod, RAWMATERIAL) |>
+  summarize(cortical_sum = sum(C_SA),
+            noncortical_sum = sum(NC_SA),
+            ratio = cortical_sum/noncortical_sum)
+  
+
+# Plot cortical to noncortical ratios with error bars from bootstrap data
+df_cortex_boot |>
+  group_by(RAWMATERIAL, STRAT_mod) |>
+  summarise(lower_CI = quantile(ratio, 0.025),
+            upper_CI = quantile(ratio, probs = 0.975),
+            median = quantile(ratio, probs = 0.5))|>
+  ggplot(aes(x = STRAT_mod, y = median, fill = RAWMATERIAL))+
+  geom_bar(stat = "identity", position = "dodge")+
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI, colour = "grey"),
+                position = "dodge")+
+  labs(fill = "",
+       x = "Grouped Layers",
+       y = "Cortical-to-Noncortical Ratios") +
+  theme_minimal()+
+  guides(colour = "none")+
+  scale_fill_viridis_d()+
+  theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",1),rep("Forest Green",1)))) -> cort_plot2
+
+rm(df_cortex_boot)
+```
+
+```{r fig-Figure2, fig.cap="Bar plot that shows the cortical-to-noncortical ratios scaled by artifact's surface area for layers grouped by diet (A) and all layers (B). Low ratio implies greater non-cortical coverage; high ratios imply greater cortical coverage. The error bars reflect a 95% confidence interval derived from bootstrap sampling. Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+  
+ggarrange(
+  cort_plot2, cort_plot1,
+  align = "h", labels = c("A", "B"),
+  common.legend = TRUE
+)
+```
+
+## Raw material surplus
+
+@fig-Figure3 explore the relationship between raw material surplus and raw material distribution. Firstly, the 50th and 75th percentile for all artifact mass (@fig-Figure3) is not significantly different, implying identically distributed distributions for artifact mass when between layers associated with coastal and terrestrial resource consumption. A Bayesian ANOVA shows no significant shifts within raw materials between layers, but there are significant difference between raw materials. Specifically, quartzite and secrete are consistently above the 75th percentile in both the grouped (a) and individual layers (b). This suggests there was a greater surplus of quartzite and silcrete at SBF, but this is not correlated with terrestrial or coastal diets.
+
+@fig-Figure4 and @fig-Figure5 explore the relationship between raw material surplus, core mass, and core maximum length. Here, there is a significant difference between the mass and maximum length between layers associated with coastal and terrestrial resource use. In both figures, the terrestrial layers have, on average, smaller cores than layers associated with coastal resource use. A reduced sample size for cores increases the statistical uncertainty, but the posterior distribution for a Bayesian ANOVA still suggests no significant difference within raw material with significant shifts between raw material through SBF. Compared with the 50th and 75th percentile, quartzite and silcrete align with the 75th percentile for every layer. However, for terrestrial layers, quartz cores fall in line with the 50th percentile but fall well below this threshold when hunter-gatherers focus on coastal resources. Overall, quartzite and silcrete have, on average, larger cores while the quartz cores are significantly smaller. Moreover, quartz cores are well below average size when hunter-gatherers focus on coastal resources, which may imply reduced quartz resource surplus during these intervals.
+
+```{r AllMass}
+# design model to look at the relationship between artifact mass and the 50th and 75th percentiles
+fit_df <- df |>
+    mutate(log_MASS = log(MASS))
+
+```
+
+```{r AllMassGGplot}
+
+df |>
+  select(MASS, STRAT, RAWMATERIAL) |>
+  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
+                            "Coastal", "Terrestrial")) |>
+  group_by(STRAT_mod) |>
+  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
+         Median_mid50 = quantile(log(MASS), probs = 0.5),
+         dist_to_lower75 = MASS - Quant_lower75,
+         dist_to_median = MASS - Median_mid50) -> df_mod
+
+hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
+  distinct(Median_mid50, Quant_lower75)
+hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
+  distinct(Median_mid50, Quant_lower75)
+
+
+fit_df |>
+  mutate(STRAT_mod = as.factor(STRAT_mod),
+         RAWMATERIAL = as.factor(RAWMATERIAL)) |>
+  ggplot(aes(x = STRAT_mod, y = log_MASS, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT_mod)))+
+  geom_boxplot()+
+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.1,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+  xlab("Grouped Layers")+ylab("log-Artifact Mass")+
+  ylim(-5,5)+
+  theme_minimal()+
+  theme(legend.title = element_blank())+
+  guides(color = "none")+
+    theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",1),rep("Forest Green",1))))+
+  scale_fill_viridis_d() -> Art_mass_freqPlot1
+
+
+fit_df |>
+  ggplot(aes(x = STRAT, y = log_MASS, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT)))+
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+    theme_minimal()+
+  theme(legend.title = element_blank())+
+  xlab("Layers")+ylab("log-Artifact Mass")+
+  ylim(-5,5)+
+  theme_minimal()+
+  theme(legend.title = element_blank())+
+  guides(color = "none")+
+    theme(axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  scale_fill_viridis_d() -> Art_mass_freqPlot2
+
+
+
+```
+
+```{r fig-Figure3, fig.cap="Boxplot of log-mass for layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+
+
+ggarrange(
+  Art_mass_freqPlot1,Art_mass_freqPlot2,
+  align = "h", labels = c("A", "B"),
+  common.legend = TRUE
+)
+```
+
+```{r CoreMass}
+# Looking only at core Mass
+fit_df <- df |>
+    select(MASS, STRAT, RAWMATERIAL, ARTIFACTCLASS) |>
+    filter(ARTIFACTCLASS == "Core") |>
+    mutate(STRAT_mod = as.factor(ifelse(STRAT %in% c("1", "2", "3"),
+                            "Coastal", "Terrestrial")),
+           RAWMATERIAL = as.factor(RAWMATERIAL),
+           log_MASS = log(MASS))
+```
+
+```{r CoreMassGGplot}
+#| warning: false
+#| message: false
+df |>
+  filter(ARTIFACTCLASS == "Core") |>
+  select(MASS, STRAT, RAWMATERIAL) |>
+  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
+                            "Coastal", "Terrestrial")) |>
+  group_by(STRAT_mod) |>
+  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
+         Median_mid50 = quantile(log(MASS), probs = 0.5),
+         dist_to_lower75 = MASS - Quant_lower75,
+         dist_to_median = MASS - Median_mid50) -> df_mod
+
+hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
+  distinct(Median_mid50, Quant_lower75)
+hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
+  distinct(Median_mid50, Quant_lower75)
+
+
+
+fit_df |>
+  ggplot(aes(x = STRAT_mod, y = log_MASS, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT_mod)))+
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.1,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+  
+    theme_minimal()+
+  theme(legend.title = element_blank())+
+  xlab("Grouped Layers")+ylab("log-Core Mass")+
+  ylim(-5,5)+
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",1),rep("Forest Green",1))))+
+  guides(color = "none")+
+  scale_fill_viridis_d() -> Core_mass_freqPlot1
+
+
+fit_df |>
+  ggplot(aes(x = STRAT, y = log_MASS, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT)))+
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+    theme_minimal()+
+  theme(legend.title = element_blank())+
+  xlab("Layers")+ylab("log-Core Mass")+
+  ylim(-5,5)+
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d() -> Core_mass_freqPlot2
+```
+
+```{r fig-Figure4, fig.cap="Boxplot of log-mass for only cores in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+
+
+ggarrange(
+  Core_mass_freqPlot1, Core_mass_freqPlot2,
+  align = "h", labels = c("A", "B"),
+  common.legend = TRUE
+)
+```
+
+```{r CoreLength}
+# Looking only at core Mass
+fit_df <- df |>
+    select(MASS, STRAT, STRAT_mod, RAWMATERIAL, MAXLENGTH, ARTIFACTCLASS) |>
+    filter(ARTIFACTCLASS == "Core") |>
+    mutate(RAWMATERIAL = as.factor(RAWMATERIAL))
+```
+
+```{r CoreLengthGGplot}
+#| warning: false
+#| message: false
+
+df |>
+  filter(ARTIFACTCLASS == "Core") |>
+  select(MASS, STRAT, RAWMATERIAL, MAXLENGTH) |>
+  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
+                            "Coastal", "Terrestrial")) |>
+  group_by(STRAT_mod) |>
+  mutate(Quant_lower75 = quantile(MAXLENGTH, probs = 0.75),
+         Median_mid50 = quantile(MAXLENGTH, probs = 0.5),
+         dist_to_lower75 = MASS - Quant_lower75,
+         dist_to_median = MASS - Median_mid50) -> df_mod
+
+hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
+  distinct(Median_mid50, Quant_lower75)
+hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
+  distinct(Median_mid50, Quant_lower75)
+
+
+fit_df |>
+  ggplot(aes(x = STRAT_mod, y = MAXLENGTH, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT_mod)))+
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.1,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+  
+  xlab("Grouped Layers")+ylab("Core Length")+
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",1),rep("Forest Green",1))))+
+  guides(color = "none")+
+  scale_fill_viridis_d() -> Core_length_freqPlot1
+
+
+fit_df |>
+  ggplot(aes(x = STRAT, y = MAXLENGTH, fill = RAWMATERIAL, 
+                   group = interaction(RAWMATERIAL, STRAT)))+
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
+  
+    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    
+  geom_hline(yintercept = hline_aq[["Quant_lower75"]],
+             color = "light blue", lty = 2)+
+  geom_hline(yintercept = hline_ter[["Quant_lower75"]],
+             color = "light green", lty = 2)+
+  
+  xlab("Layers")+ylab("Core Length")+
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d() -> Core_length_freqPlot2
+```
+
+```{r fig-Figure5, fig.cap="Boxplot of the maximum core length in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+
+ggarrange(
+  Core_length_freqPlot1, Core_length_freqPlot2,
+  align = "h", labels = c("A", "B"),
+  common.legend = TRUE
+)
+```
+
+## Toolkit composition
+
+@fig-Figure6 shows the relationship between the percent of formal tools and lithic density through SBF. The expectation is that more formal tools and lower lithic density reflects hunter-gatherers that move more frequently. Fewer formal tools and a higher lithic density reflects hunter-gatherers with lower mobility strategies. @fig-Figure6 implies the layers associated with coastal resource exploitation (1, 2, and 3) are associated with higher mobility and the layers associated with terrestrial resources (4a and 4b) are associated with lower mobility. This result contradicts our initial hypothesis that expects reduced mobility when hunter-gatherers at SBF a focused on terrestrial resources.
+
+```{r fig-Figure6, fig.cap="Percent of retouched tools to lithic density at SBF. Higher formal tools and lower lithic density implies higher mobility; lower formal tools and higher lithic density implies lower mobility. These data suggest layers 1, 2, and 3 are asscoaited with increased mobility and layers 4a and 4b are associated with lower mobility."}
+
+
+sbf_df |>
+  filter(Layer != "5") |>
+  mutate(Layer = ifelse(Layer %in% c("3a", "3b"), "3", Layer)) |>
+  group_by(Layer) |>
+  summarize(Tool_sum = sum(Count)) |>
+  mutate(Lithic_Dens = c(8.8, 11.7, 16, 30.7, 18.7)) |>
+  left_join(
+    
+    sbf_un |>
+      filter(Layer != "5") |>
+      mutate(Layer = ifelse(Layer %in% c("3a", "3b"), "3", Layer)) |>
+      group_by(Layer) |>
+      summarize(Deb_sum = sum(Count)) 
+    
+) |>
+  mutate(Tool_Perc = (Tool_sum/Deb_sum)*100) |>
+  
+  ggplot(aes(x = Lithic_Dens, y = Tool_Perc, color = Layer, label = Layer))+
+  geom_point(size = 2)+
+  geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
+  xlab("Lithic Density")+ylab("Formal Tool Percent")+
+  theme_minimal()+
+  guides(color = "none")+
+  scale_color_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+                                "4a" = "forestgreen", "4b" = "forestgreen"))+
+  annotate(geom = "text", x = 28, y = 5.2, label = "Lower Mobility")+
+  annotate(geom = "text", x = 12, y = 8.8, label = "Higher Mobility")
+```
+
+## Flake utility and reduction intensity
+
+```{r flakeUtRed}
+
+df.flakes |>
+  select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
+  group_by(STRAT_mod, RAWMATERIAL) |>
+  summarize(Utility_ave = mean(Utility),
+            Red_ave= mean(Reduction),
+            
+            Est_ut = seq(150, 700, 10),
+            Est_red = Est_ut^35) |>
+  ggplot(aes(x = Red_ave, y = Utility_ave, 
+                   color = STRAT_mod, label = STRAT_mod))+
+    #geom_point(aes(x = Est_red, y = Est_ut))+
+    geom_point(size = 2)+
+    facet_wrap(~RAWMATERIAL)+
+  
+  
+    xlab("Reduction Intensity")+ylab("Utility")+
+    theme(legend.title = element_blank())+
+    guides(color = "none")+
+    scale_color_manual(values = c("Coastal" = "blue", 
+                                "Terrestrial" = "Forest Green")) -> FlakeUtRed1
+###########################
+
+
+```
+
+```{r fig-Figure7, fig.cap="Boxplot of log-Flake utility for layers grouped by diet (A) and all individual layers (B). There are significant differences between raw material but not within raw material. Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+
+df.flakes |>
+  select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
+  group_by(STRAT, RAWMATERIAL) |>
+  summarize(Utility_ave = mean(Utility),
+            Red_ave = mean(Reduction)) |>
+  ggplot(aes(x = Red_ave, y = Utility_ave, 
+                   color = STRAT, label = STRAT))+
+    geom_point(size = 2)+
+    facet_wrap(~RAWMATERIAL)+
+    geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
+  
+  
+    xlab("Reduction Intensity")+ylab("Utility")+
+    theme(legend.title = element_blank())+
+    guides(color = "none")+
+    scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+             "4a" = "forestgreen", "4b" = "forestgreen"))
+
+```
+
+## Retouched flake utility to retouch intensity
+
+```{r FlakeRetouch}
+df.retouch |>
+  filter(RETOUCHEDPIECETYPOLOGY == "MinimallyRetouched") |>
+  mutate(Ratio =
+           ((EDGETHICKNESS_1+EDGETHICKNESS_2+EDGETHICKNESS_3)/3)/MAXTHICKNESS,
+         Region = RETOUCHREGIONNUMBER/8,
+         Ratio = rescale(Ratio, to = c(0, 10)),
+         Region = rescale(Region, to = c(0, 10))) |>
+  select(STRAT, UNIT, RAWMATERIAL, Ratio, Region, MASS, MAXWIDTH, MAXLENGTH,
+         MAXTHICKNESS, RETOUCHREGIONLOCATION, LENGTHLONGESTRETOUCH) -> ret_int
+
+```
+
+```{r fig-Figure8}
+ret_int |>
+  group_by(STRAT, RAWMATERIAL) |>
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  summarize(Ratio_m = mean(Ratio), Region_m = mean(Region),
+            MWidth = mean(MAXWIDTH), MLength = mean(MAXLENGTH)) |>
+  ggplot(aes(x = (Ratio_m+Region_m)/2, y = MWidth*MLength, 
+             color = STRAT, label = STRAT))+
+  geom_point(size = 2)+
+  facet_wrap(~RAWMATERIAL)+
+  geom_text(aes(fontface = 2),hjust = -0.2, vjust = -0.5)+
+  
+  
+  xlab("Flake Retouch Intensity")+ylab("Flake Utility")+
+  theme(legend.title = element_blank())+
+  guides(color = "none")+
+  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+           "4a" = "forestgreen", "4b" = "forestgreen"))
+```
+
+## Cores
+
+```{r coreVlumeRemoved}
+df.flakes |>
+  select(RAWMATERIAL, STRAT, PLATFORMTHICKNESS, MAXTHICKNESS) |>
+  group_by(RAWMATERIAL, STRAT) |>
+  na.omit() |>
+  summarize(m_plat = mean(PLATFORMTHICKNESS),
+            m_thick = mean(MAXTHICKNESS)) |>
+  arrange(STRAT, RAWMATERIAL) -> flake.vr
+
+flake.vr |>
+  left_join(df.cores) |>
+  select(m_plat, m_thick,
+         STRAT, RAWMATERIAL, MAXLENGTH, MAXWIDTH, MAXTHICKNESS,
+         FLAKEGENERATIONSTHICKNESS, FLAKEGENERATIONSLENGTH, FLAKEGENERATIONSWIDTH,
+         SA_Ellipse, SCARCOUNT) |>
+  na.omit() |>
+  group_by(RAWMATERIAL, STRAT) |>
+  mutate(V = pi*(4/3)*(MAXLENGTH/2)*(MAXWIDTH/2)*(MAXTHICKNESS/2),
+         VR = pi*(4/3)*((MAXLENGTH + (m_plat*FLAKEGENERATIONSLENGTH))/2)*
+                       ((MAXWIDTH + (m_plat*FLAKEGENERATIONSWIDTH))/2)*
+                       ((MAXTHICKNESS + (m_thick*FLAKEGENERATIONSTHICKNESS))/2),
+         volume_removed = (V/VR)*100,
+         
+         SDI = SCARCOUNT/SA_Ellipse) |>
+  select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse) |>
+  filter(RAWMATERIAL == "Quartz") -> cores.vr
+```
+
+```{r fig-Figure9}
+# Tells us:
+# High reduction intensity and low utility is more mobile
+# High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
+# Low reduction intensity and low utility means not focused on flake production?
+cores.vr |>
+  group_by(STRAT) |>
+  summarize(volume_ave = mean(V),
+            sdi_ave = mean(SDI),
+            volumeRec_mean = mean(volume_removed)) |>
+  ggplot(aes(x = volumeRec_mean, y = volume_ave,
+             color = STRAT, label = STRAT))+
+  geom_point(size = 2)+
+  geom_text(aes(fontface = 2),hjust = -0.2, vjust = -0.5)+
+  
+  
+  xlab("Core Reduction Intensity")+ylab("Core Utility")+
+  theme(legend.title = element_blank())+
+  guides(color = "none")+
+  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+           "4a" = "forestgreen", "4b" = "forestgreen"))
+```
+
+## Scraper utility and retouch intensity
+
+```{r scraperRetouchIntensity}
+# Define a database for scraper retouch
+df.scrap <- df.retouch |>
+  filter(RETOUCHEDPIECETYPOLOGY == "SideScraper" | 
+           RETOUCHEDPIECETYPOLOGY == "EndScraper" |
+           RETOUCHEDPIECETYPOLOGY == "Side-EndScraper") |>
+  select(1:11,14:21, 33:43, 44:49) |>
+  select("SCRAPERRETOUCHHEIGHT1", "SCRAPERRETOUCHHEIGHT2", "SCRAPERRETOUCHHEIGHT3",
+         "SCRAPERRETOUCHANGLE1", "SCRAPERRETOUCHANGLE2", "SCRAPERRETOUCHANGLE3",
+         "SCRAPERDORSALANGLE1", "SCRAPERDORSALANGLE2", "SCRAPERDORSALANGLE3",
+         "SCRAPERRETOUCHLENGTH",
+         "SCRAPERMAXTHICKNESS",
+         "MAXLENGTH", "MAXWIDTH",
+         
+         "RAWMATERIAL", "STRAT", "MASS") |>
+  na.omit() |>
+  mutate(RET_INT = round(((SCRAPERRETOUCHHEIGHT1+
+                            SCRAPERRETOUCHHEIGHT2+
+                            SCRAPERRETOUCHHEIGHT3)/SCRAPERMAXTHICKNESS)*
+                           SCRAPERRETOUCHLENGTH,2),
+         SA = MAXLENGTH*MAXWIDTH)
+
+
+# Preprocess data to enter into custom function to calculate scraper reduction
+scrap.red <- df.scrap |>
+  na.omit() |>
+  mutate(D = (SCRAPERRETOUCHHEIGHT1+SCRAPERRETOUCHHEIGHT2+SCRAPERRETOUCHHEIGHT3)/3,
+         a = (SCRAPERRETOUCHANGLE1+SCRAPERRETOUCHANGLE2+SCRAPERRETOUCHANGLE3)/3,
+         b = (SCRAPERDORSALANGLE1+SCRAPERDORSALANGLE2+SCRAPERDORSALANGLE3)/3) |>
+  rename(L = SCRAPERRETOUCHLENGTH)
+
+scrap.red <- scraper_red(scrap.red$L, scrap.red$D, scrap.red$a, scrap.red$b)/1000
+
+scrap.red <- scrap.red |>
+  mutate(RETOUCH = as.vector(scrap.red$Reduction),
+         STRAT = df.scrap$STRAT,
+         UTILITY = df.scrap$MAXWIDTH*df.scrap$MAXLENGTH,
+         
+         RAWMATERIAL = df.scrap$RAWMATERIAL,
+         
+         RE_Ut = UTILITY/Reduction,
+         
+         MASS = df.scrap$MASS)
+```
+
+```{r fig-Figure10}
+scrap.red |>
+  group_by(STRAT) |>
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  summarize(Retouch_ave = mean(RETOUCH),
+            Utility_ave = mean(UTILITY)) |>
+  ggplot(aes(x = Retouch_ave, y = Utility_ave, 
+             color = STRAT, label = STRAT))+
+  geom_point(size = 2)+
+  geom_text(aes(fontface = 2),hjust = -0.2, vjust = -0.5)+
+  
+  
+  xlab("Scraper Retouch Intensity")+ylab("Scraper Utility")+
+  theme(legend.title = element_blank())+
+  guides(color = "none")+
+  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+           "4a" = "forestgreen", "4b" = "forestgreen"))
+```
