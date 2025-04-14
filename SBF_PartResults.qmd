@@ -778,6 +778,8 @@ sbf_df |>
 
 ## Flake utility and reduction intensity
 
+@fig-Figure7 shows the relationship between average flake utility and reduction intensity for quartz, quartzite, and silcrete. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, we would expect greater flake utility nd reduction intensity. However. @fig-Figure7 shows that, on average, those layers associated with terrestrial diets has greater flake utility and reduction intensity. Silcrete emphasizes this contradiction, showing that layers 4a and 4b have greater fake utility on average with no distinction between reduction intensity. Quartzite shows a mixed pattern between those layers associated with coastal and terrestrial diets with no distinction across either axis. Quartz also shows a mixed pattern, but all five layers are clustered closer together, only varying in the degree of reduction intensity. Overall, there are unique differences between flake utility and reduction intensity, but al patterns fail to support our initial hypothesis.
+
 ```{r flakeUtRed}
 
 df.flakes |>
@@ -805,7 +807,7 @@ df.flakes |>
 
 ```
 
-```{r fig-Figure7, fig.cap="Boxplot of log-Flake utility for layers grouped by diet (A) and all individual layers (B). There are significant differences between raw material but not within raw material. Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure7, fig.cap="Flake utility to reduction intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, we would expect greater flake utility nd reduction intensity.s These pattersn fail to support this hypothesis."}
 
 df.flakes |>
   select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
@@ -819,7 +821,7 @@ df.flakes |>
     geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
   
   
-    xlab("Reduction Intensity")+ylab("Utility")+
+    xlab("Reduction Intensity")+ylab("Flake Utility")+
     theme(legend.title = element_blank())+
     guides(color = "none")+
     scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
@@ -828,6 +830,8 @@ df.flakes |>
 ```
 
 ## Retouched flake utility to retouch intensity
+
+@fig-Figure8 shows the relationship between flake utility and retouch intensity for quartz, ,quartzite, and silcrete. Our initial hypothesis predicts that, as hunter-gatherers focused on coastal resources, flake utility should increase and retouch should decrease. However, @fig-Figure8 contradicts this expectation. Quartzite and silcrete show littler variation in retouch intensity and greater spread in flake utility, but there is no difference between layers associated with terrestrial and coastal diets. Quartz is the only raw material that shows a distinct difference. However, this is the inverse pattern that we expect to see. Here, as hunter-gatherers focused on coastal resources, the flake utility decreased and the retouch intensity increased. These data not only fail to support our initial hypothesis, but provide evidence of the opposite pattern we would expect to see at SBF.
 
 ```{r FlakeRetouch}
 df.retouch |>
@@ -842,7 +846,7 @@ df.retouch |>
 
 ```
 
-```{r fig-Figure8}
+```{r fig-Figure8, fig.cap="Flake utility to retouch intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coaastal (blue) diets. Our initial hypothesis predicts that, as hunter-gatherers focused on coastal resources, flake utility should increase and retouch should decrease. Quartzite and silcrete fail to support are hypothesis, and quartz shows an inverse pattern to our expectations."}
 ret_int |>
   group_by(STRAT, RAWMATERIAL) |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
@@ -864,7 +868,9 @@ ret_int |>
 
 ## Cores
 
-```{r coreVlumeRemoved}
+@fig-Figure9 shows the relationship between remaining core utility (volume) and reduction intensity (percent of the core reduced) for quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. Similar to previous analyses, @fig-Figure9 does not provide evidence in support of our initial hypothesis. This figure shows that, on average, layers associated with terrestrial diets (4a and 4b) show lower remaining core utility, with layer 2 as an outlier group. Similarly, layer 2 has the lowest percent of volume removed from the cores, whereas, the other layers show similar degrees of reduction intensity. This may reflect that hunter-gatherers were not focused on flake production at SBF during layer 2. But overall, there is no evidence to support our initial prediction.
+
+```{r coreVolumeRemoved}
 df.flakes |>
   select(RAWMATERIAL, STRAT, PLATFORMTHICKNESS, MAXTHICKNESS) |>
   group_by(RAWMATERIAL, STRAT) |>
@@ -892,7 +898,7 @@ flake.vr |>
   filter(RAWMATERIAL == "Quartz") -> cores.vr
 ```
 
-```{r fig-Figure9}
+```{r fig-Figure9, fig.cap="Core utility to core reduction intensity colored by terrestrial (green) and coaastal (blue) diets. Due to sample size constraints, this figure is based on quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. There is no evidence too support our initial hypothesis."}
 # Tells us:
 # High reduction intensity and low utility is more mobile
 # High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
@@ -916,6 +922,8 @@ cores.vr |>
 ```
 
 ## Scraper utility and retouch intensity
+
+@fig-Figure10 shows the relationship between scraper utility and retouch intensity including all raw materials. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure provides evidence against this hypothesis and supports an opposite pattern than what we would expect. We expect layers 4a and 4b to have increased scraper retouch but reduced utility and layers 1-3 should have greater scraper utility and reduced retouch intensity. However, when hunter-gatherers are more mobile and focused on terrestrial resources, their scrapers' utility and retouch intensity increases. When they focus on coastal resources, they have the lowest scraper utility and retouch intensity. This, again, contradicts our initial hypothesis.
 
 ```{r scraperRetouchIntensity}
 # Define a database for scraper retouch
