@@ -988,3 +988,5 @@ scrap.red |>
   scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
            "4a" = "forestgreen", "4b" = "forestgreen"))
 ```
+
+# Discussion and Conclusion
