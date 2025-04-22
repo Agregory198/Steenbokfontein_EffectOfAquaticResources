@@ -1,7 +1,5 @@
 ---
 title: "Steenbokfontein Preliminary Results"
-bibliography: references.bib
-link-citations: true
 execute: 
   echo: false
   warning: false
