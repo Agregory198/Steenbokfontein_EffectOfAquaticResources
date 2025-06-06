@@ -79,15 +79,33 @@ scraper_red <- function(L, D, a, b){
 
 ```{r ReadData}
 # Read and clean data
-df <- read.csv("AG_Summer2024_06_26_Final.csv") |>
+df_sum24 <- read.csv("AG_Summer2024_06_26_Final.csv") |>
+  select(-c('X')) |>
   filter(RAWMATERIAL != "BWA UPPER 1" &
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
                         ifelse(STRAT == "3b", "3", STRAT)),
-         STRAT_mod = ifelse(STRAT %in% c("4a", "4b"), "Terrestrial", "Coastal")) |>
+         STRAT_mod = ifelse(STRAT %in% c("5"), "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod),
          RAWMATERIAL = factor(RAWMATERIAL))
+
+df_sum25 <- read.csv("AG_Summer2025_06_06.csv") |>
+  filter(RAWMATERIAL != "BWA UPPER 1" &
+           RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
+                        ifelse(STRAT == "3b", "3", STRAT)),
+         STRAT_mod = ifelse(STRAT %in% c("5"),
+                            "Terrestrial", "Coastal")) |>
+  mutate(STRAT = factor(STRAT),
+         STRAT_mod = factor(STRAT_mod),
+         RAWMATERIAL = factor(RAWMATERIAL))
+
+df <- rbind(df_sum24, df_sum25) |>
+  mutate(TECHLENGTH = as.numeric(TECHLENGTH),
+         MAXWIDTH = as.numeric(MAXWIDTH),
+         MAXTHICKNESS = as.numeric(MAXTHICKNESS)) |>
+  filter(STRAT %in% c("1", "2", "3", "4a", "4b", "5"))
 
 # take average core flake scar length
 df |>
@@ -99,8 +117,7 @@ df |>
 df.flakes <- df |>
   filter(ARTIFACTCLASS == "Flake" & COMPLETENESS == "Complete") |>
   select(1:11,33:35,38,48:53,64:69,STRAT_mod)|>
-  mutate(TECHLENGTH = as.numeric(TECHLENGTH),
-         Utility = MAXWIDTH*MAXLENGTH,
+  mutate(Utility = MAXWIDTH*MAXLENGTH,
          Reduction = ifelse(
            RAWMATERIAL == "Opaline/CCS", 
           TECHLENGTH/df.core_average$a[which(df.core_average == "Opaline/CCS")],
@@ -180,7 +197,6 @@ df |>
 
 df |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
-  mutate(STRAT_mod = ifelse(STRAT %in% c("4a", "4b"), "Terrestrial", "Coastal")) |>
   group_by(STRAT_mod, RAWMATERIAL, ARTIFACTCLASS) |>
   summarize(Freq = n()) |>
   mutate(cs = sum(Freq),
@@ -392,9 +408,7 @@ fit_df <- df |>
 ```{r AllMassGGplot}
 
 df |>
-  select(MASS, STRAT, RAWMATERIAL) |>
-  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
-                            "Coastal", "Terrestrial")) |>
+  select(MASS, STRAT, RAWMATERIAL, STRAT_mod) |>
   group_by(STRAT_mod) |>
   mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
          Median_mid50 = quantile(log(MASS), probs = 0.5),
@@ -484,11 +498,9 @@ ggarrange(
 ```{r CoreMass}
 # Looking only at core Mass
 fit_df <- df |>
-    select(MASS, STRAT, RAWMATERIAL, ARTIFACTCLASS) |>
+    select(MASS, STRAT, RAWMATERIAL, ARTIFACTCLASS, STRAT_mod) |>
     filter(ARTIFACTCLASS == "Core") |>
-    mutate(STRAT_mod = as.factor(ifelse(STRAT %in% c("1", "2", "3"),
-                            "Coastal", "Terrestrial")),
-           RAWMATERIAL = as.factor(RAWMATERIAL),
+    mutate(RAWMATERIAL = as.factor(RAWMATERIAL),
            log_MASS = log(MASS))
 ```
 
@@ -497,9 +509,7 @@ fit_df <- df |>
 #| message: false
 df |>
   filter(ARTIFACTCLASS == "Core") |>
-  select(MASS, STRAT, RAWMATERIAL) |>
-  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
-                            "Coastal", "Terrestrial")) |>
+  select(MASS, STRAT, RAWMATERIAL, STRAT_mod) |>
   group_by(STRAT_mod) |>
   mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
          Median_mid50 = quantile(log(MASS), probs = 0.5),
@@ -598,9 +608,7 @@ fit_df <- df |>
 
 df |>
   filter(ARTIFACTCLASS == "Core") |>
-  select(MASS, STRAT, RAWMATERIAL, MAXLENGTH) |>
-  mutate(STRAT_mod = ifelse(STRAT %in% c("1", "2", "3"),
-                            "Coastal", "Terrestrial")) |>
+  select(MASS, STRAT, RAWMATERIAL, MAXLENGTH, STRAT_mod) |>
   group_by(STRAT_mod) |>
   mutate(Quant_lower75 = quantile(MAXLENGTH, probs = 0.75),
          Median_mid50 = quantile(MAXLENGTH, probs = 0.5),
