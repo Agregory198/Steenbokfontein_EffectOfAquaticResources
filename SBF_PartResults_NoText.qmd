@@ -837,8 +837,7 @@ flake.vr |>
          volume_removed = (V/VR)*100,
          
          SDI = SCARCOUNT/SA_Ellipse) |>
-  select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse) |>
-  filter(RAWMATERIAL == "Quartz") -> cores.vr
+  select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse)-> cores.vr
 ```
 
 ```{r fig-Figure9, fig.cap="Core utility to core reduction intensity colored by terrestrial (green) and coaastal (blue) diets. Due to sample size constraints, this figure is based on quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. There is no evidence too support our initial hypothesis."}
@@ -847,17 +846,19 @@ flake.vr |>
 # High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
 # Low reduction intensity and low utility means not focused on flake production?
 cores.vr |>
-  group_by(STRAT) |>
+  #filter(STRAT != "5") |>
+  group_by(STRAT, RAWMATERIAL) |>
   summarize(volume_ave = mean(V),
             sdi_ave = mean(SDI),
             volumeRec_mean = mean(volume_removed)) |>
-  ggplot(aes(x = volumeRec_mean, y = volume_ave,
+  ggplot(aes(x = volumeRec_mean, y = log(volume_ave),
              color = STRAT, label = STRAT))+
   geom_point(size = 2)+
   geom_text(aes(fontface = 2),hjust = -0.2, vjust = -0.5)+
+  facet_grid(~RAWMATERIAL)+
   
   
-  xlab("Core Reduction Intensity")+ylab("Core Utility")+
+  xlab("Core Reduction Intensity")+ylab("log-Core Utility")+
   theme(legend.title = element_blank())+
   guides(color = "none")+
   scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
