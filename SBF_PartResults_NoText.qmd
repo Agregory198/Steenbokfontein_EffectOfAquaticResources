@@ -190,7 +190,9 @@ df |>
        x = "Layer",
        y = "Proportion") +
   theme_minimal()+
+  theme_classic(base_size = 20)+
   scale_fill_viridis_d()+
+  guides(fill = "none")+
   theme(axis.text.x = 
           element_text(colour = 
                          c(rep("Blue",3),rep("Forest Green",2)))) -> RM_plot1
@@ -208,6 +210,7 @@ df |>
        x = "Grouped Layers",
        y = "Proportion") +
   theme_minimal()+
+  theme_classic(base_size = 20)+
   scale_fill_viridis_d()+
   theme(axis.text.x = 
           element_text(colour = 
@@ -445,6 +448,7 @@ fit_df |>
   ylim(-5,5)+
   theme_minimal()+
   theme(legend.title = element_blank())+
+  theme_classic(base_size = 18)+
   guides(color = "none")+
     theme(axis.text.x = 
           element_text(colour = 
@@ -475,6 +479,7 @@ fit_df |>
   ylim(-5,5)+
   theme_minimal()+
   theme(legend.title = element_blank())+
+  theme_classic(base_size = 18)+
   guides(color = "none")+
     theme(axis.text.x = 
           element_text(colour = 
@@ -840,6 +845,42 @@ flake.vr |>
   select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse)-> cores.vr
 ```
 
+```{r}
+# Model the percent of volume removed against Strat conditioned by material
+cores.vr |>
+  filter(STRAT != "5") |>
+  ggplot(aes(x = STRAT, y = volume_removed, fill = RAWMATERIAL))+
+  geom_boxplot() +
+  ylab("Reduction Intensity")+xlab("Layer")+
+  
+  theme_classic(base_size = 18)+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d()
+  
+  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
+           "4a" = "forestgreen", "4b" = "forestgreen"))
+
+# Model the amount of volume remaining (V) against Strat conditioned by material  
+cores.vr |>
+  filter(STRAT != "5") |>
+  ggplot(aes(x = STRAT, y = log(V), fill = RAWMATERIAL))+
+  geom_boxplot() +
+  ylab("log-Utility")+xlab("Layer")+
+  
+  theme_classic(base_size = 18)+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d()
+  
+```
+
 ```{r fig-Figure9, fig.cap="Core utility to core reduction intensity colored by terrestrial (green) and coaastal (blue) diets. Due to sample size constraints, this figure is based on quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. There is no evidence too support our initial hypothesis."}
 # Tells us:
 # High reduction intensity and low utility is more mobile
@@ -910,6 +951,38 @@ scrap.red <- scrap.red |>
          RE_Ut = UTILITY/Reduction,
          
          MASS = df.scrap$MASS)
+```
+
+```{r}
+# model the amount of scraper utility
+scrap.red|>
+  filter(STRAT != "5") |>
+  ggplot(aes(x = STRAT, y = UTILITY, fill = RAWMATERIAL))+
+  geom_boxplot() +
+  ylab("Utility")+xlab("Layer")+
+  
+  theme_classic(base_size = 18)+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d()
+
+# Model the amount of scraper retouch 
+scrap.red |>
+  filter(STRAT != "5") |>
+  ggplot(aes(x = STRAT, y = log(RETOUCH), fill = RAWMATERIAL))+
+  geom_boxplot() +
+  ylab("log-Retouch Intensity")+xlab("Layer")+
+  
+  theme_classic(base_size = 18)+
+  theme(legend.title = element_blank(),
+        axis.text.x = 
+          element_text(colour = 
+                         c(rep("Blue",3),rep("Forest Green",2))))+
+  guides(color = "none")+
+  scale_fill_viridis_d()
 ```
 
 ```{r fig-Figure10, fig.cap="Scraper utility to retouch intensity for all scrapers at SBF colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure shows the opposite pattern than we would expect."}
