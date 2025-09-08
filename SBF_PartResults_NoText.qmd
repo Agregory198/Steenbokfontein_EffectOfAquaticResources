@@ -88,8 +88,7 @@ df_sum24 <- read.csv("AG_Summer2024_06_26_Final.csv") |>
                         ifelse(STRAT == "3b", "3", STRAT)),
          STRAT_mod = ifelse(STRAT %in% c("5"), "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
-         STRAT_mod = factor(STRAT_mod),
-         RAWMATERIAL = factor(RAWMATERIAL))
+         STRAT_mod = factor(STRAT_mod))
 
 df_sum25 <- read.csv("AG_Summer2025_SBF_final.csv") |>
   filter(RAWMATERIAL != "BWA UPPER 1" &
@@ -99,8 +98,7 @@ df_sum25 <- read.csv("AG_Summer2025_SBF_final.csv") |>
          STRAT_mod = ifelse(STRAT %in% c("5"),
                             "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
-         STRAT_mod = factor(STRAT_mod),
-         RAWMATERIAL = factor(RAWMATERIAL)) |>
+         STRAT_mod = factor(STRAT_mod)) |>
   
   select(-c(X))
 
@@ -141,8 +139,7 @@ df_glenda_flakes <- df_glenda |>
          STRAT_mod = ifelse(STRAT %in% c("5"),
                           "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
-         STRAT_mod = factor(STRAT_mod),
-         RAWMATERIAL = factor(RAWMATERIAL)) |>
+         STRAT_mod = factor(STRAT_mod)) |>
   
   relocate(STRAT, .before = "UNIT") |>
   relocate(CORTEXTYPE, .before = "ARTIFACTCLASS")
@@ -176,8 +173,7 @@ df_leano_flakes <- df_leano |>
           STRAT_mod = ifelse(STRAT %in% c("5"),
                         "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
-         STRAT_mod = factor(STRAT_mod),
-         RAWMATERIAL = factor(RAWMATERIAL))
+         STRAT_mod = factor(STRAT_mod))
 
 
 
@@ -186,12 +182,35 @@ df_leano_flakes <- df_leano_flakes[1:421,] |>
   relocate(CORTEXTYPE, .before = "ARTIFACTCLASS")
   
 
+df_students <- rbind(df_leano_flakes, df_glenda_flakes)
+
 
 df <- rbind(df_sum24, df_sum25) |>
+  merge(df_students, all = T) |>
   mutate(TECHLENGTH = as.numeric(TECHLENGTH),
          MAXWIDTH = as.numeric(MAXWIDTH),
          MAXTHICKNESS = as.numeric(MAXTHICKNESS)) |>
-  filter(STRAT %in% c("1", "2", "3", "4a", "4b", "5"))
+  filter(STRAT %in% c("1", "2", "3", "4a", "4b", "5")) |>
+  
+  mutate(ARTIFACTCLASS = ifelse(ARTIFACTCLASS == "flake", "Flake",
+                         ifelse(ARTIFACTCLASS == "blade", "Flake",
+                         ifelse(ARTIFACTCLASS == "Flake/Blade", "Flake",
+                         ifelse(ARTIFACTCLASS == "Fragment", "Flake",
+                                                     ARTIFACTCLASS)))),
+         
+         RAWMATERIAL = as.factor(
+           ifelse(RAWMATERIAL == "Silcrete flake", "Silcrete",
+                              ifelse(RAWMATERIAL == "OTHER", "Other",
+                                     RAWMATERIAL))),
+         
+         CORTEX = ifelse(CORTEX == "10-40%", "11-40%",
+                  ifelse(CORTEX == "90-99%", "91-99%",
+                  ifelse(CORTEX == "60-90%", "61-90%",
+                  ifelse(CORTEX == "40-60%", "41-60%",
+                         CORTEX))))) |>
+  
+  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete"),
+         CORTEX != "\\")
 
 
 # take average core flake scar length
@@ -203,14 +222,12 @@ df |>
 # Subset data by flakes and flake variables
 df.flakes <- df |>
   filter(ARTIFACTCLASS == "Flake" & COMPLETENESS == "Complete") |>
-  select(1:11,33:35,48:53,64:69,STRAT_mod) |>
-  
-  rbind(df_glenda_flakes, df_leano_flakes) |>
+  select(any_of(names(df_students))) |>
   
   mutate(Utility = MAXWIDTH*MAXLENGTH,
          Reduction = ifelse(
-           RAWMATERIAL == "Opaline/CCS", 
-          TECHLENGTH/df.core_average$a[which(df.core_average == "Opaline/CCS")],
+           RAWMATERIAL == "Silcrete", 
+          TECHLENGTH/df.core_average$a[which(df.core_average == "Silcrete")],
                       ifelse(RAWMATERIAL == "Quartz", 
           TECHLENGTH/df.core_average$a[which(df.core_average == "Quartz")],
                        ifelse(RAWMATERIAL == "Quartzite", 
@@ -220,7 +237,7 @@ df.flakes <- df |>
 # Subset data by cores and core variables
 df.cores <- df |>
   filter(ARTIFACTCLASS == "Core" & CORECOMPLETENESS == "Complete") |>
-  select(1:10,13,54:69) |>
+  select(1:10,21:28,61:70) |>
   mutate(SA_Ellipse = (4*pi)*
            ((((((MAXLENGTH/2)*(MAXWIDTH/2))^1.6075)+
            (((MAXLENGTH/2)*(MAXTHICKNESS/2))^1.6075)+
@@ -230,7 +247,7 @@ df.cores <- df |>
 df.retouch <- df |>
   filter(ARTIFACTCLASS == "RetouchedTool" & RAWMATERIAL != "BWA UPPER 1" &
            COMPLETENESS == "Complete") |>
-  select(1:11,13:32,36:47,64:69)
+  select(1:11,21:27,29:60)
 
 # Read tabulated data from previous publications (i.e. Jerardino & Yates)
 sbf_df <- read.csv("SBF_ToolType.csv")
@@ -338,9 +355,11 @@ df |>
            MAXLENGTH*MAXWIDTH),
          
          cortical = ifelse(CORTEX == "0%", 0,
-                           ifelse(CORTEX == "10-40%", 0.2,
-                                  ifelse(CORTEX == "1-10", 0.05,
-                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+                    ifelse(CORTEX == "1-10", 0.05,
+                    ifelse(CORTEX == "11-40%", 0.25,
+                    ifelse(CORTEX == "41-60%", 0.5,
+                    ifelse(CORTEX == "61-90%", 0.75, 
+                    ifelse(CORTEX == "91-99%", 0.95, 1)))))),
          
          C_SA = SA*cortical) |>
   mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
@@ -367,9 +386,11 @@ df_emp_cortex <- df |>
            MAXLENGTH*MAXWIDTH),
          
          cortical = ifelse(CORTEX == "0%", 0,
-                           ifelse(CORTEX == "10-40%", 0.2,
-                                  ifelse(CORTEX == "1-10", 0.05,
-                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+                    ifelse(CORTEX == "1-10", 0.05,
+                    ifelse(CORTEX == "11-40%", 0.25,
+                    ifelse(CORTEX == "41-60%", 0.5,
+                    ifelse(CORTEX == "61-90%", 0.75, 
+                    ifelse(CORTEX == "91-99%", 0.95,1)))))),
          
          C_SA = SA*cortical) |>
   mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
@@ -384,9 +405,9 @@ df_emp_cortex <- df |>
 # Plot cortical to noncortical ratios with error bars from bootstrap data
 df_cortex_boot |>
   group_by(RAWMATERIAL, STRAT) |>
-  summarise(lower_CI = quantile(ratio, 0.025),
-            upper_CI = quantile(ratio, probs = 0.975),
-            median = quantile(ratio, probs = 0.5))|>
+  summarise(lower_CI = quantile(ratio, 0.025, na.rm = T),
+            upper_CI = quantile(ratio, probs = 0.975, na.rm = T),
+            median = quantile(ratio, probs = 0.5, na.rm = T))|>
   ggplot(aes(x = STRAT, y = median, fill = RAWMATERIAL))+
   geom_bar(data = df_emp_cortex, aes(x = STRAT, y = ratio, fill = RAWMATERIAL),
            stat = "identity", position = "dodge")+
@@ -418,9 +439,11 @@ df |>
            MAXLENGTH*MAXWIDTH),
          
          cortical = ifelse(CORTEX == "0%", 0,
-                           ifelse(CORTEX == "10-40%", 0.2,
-                                  ifelse(CORTEX == "1-10", 0.05,
-                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+                    ifelse(CORTEX == "1-10", 0.05,
+                    ifelse(CORTEX == "11-40%", 0.25,
+                    ifelse(CORTEX == "41-60%", 0.5,
+                    ifelse(CORTEX == "61-90%", 0.75, 
+                    ifelse(CORTEX == "91-99%", 0.95,1)))))),
          
          C_SA = SA*cortical) |>
   mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
@@ -446,9 +469,11 @@ df_emp_cortex <- df |>
            MAXLENGTH*MAXWIDTH),
          
          cortical = ifelse(CORTEX == "0%", 0,
-                           ifelse(CORTEX == "10-40%", 0.2,
-                                  ifelse(CORTEX == "1-10", 0.05,
-                                         ifelse(CORTEX == "60-90%", 0.75, 0)))),
+                    ifelse(CORTEX == "1-10", 0.05,
+                    ifelse(CORTEX == "11-40%", 0.25,
+                    ifelse(CORTEX == "41-60%", 0.5,
+                    ifelse(CORTEX == "61-90%", 0.75, 
+                    ifelse(CORTEX == "91-99%", 0.95,1)))))),
          
          C_SA = SA*cortical) |>
   mutate(NC_SA = ifelse(CORTEX == "0%", SA, 0)) |>
@@ -462,9 +487,9 @@ df_emp_cortex <- df |>
 # Plot cortical to noncortical ratios with error bars from bootstrap data
 df_cortex_boot |>
   group_by(RAWMATERIAL, STRAT_mod) |>
-  summarise(lower_CI = quantile(ratio, 0.025),
-            upper_CI = quantile(ratio, probs = 0.975),
-            median = quantile(ratio, probs = 0.5))|>
+  summarise(lower_CI = quantile(ratio, 0.025, na.rm = T),
+            upper_CI = quantile(ratio, probs = 0.975, na.rm = T),
+            median = quantile(ratio, probs = 0.5, na.rm = T))|>
   ggplot(aes(x = STRAT_mod, y = median, fill = RAWMATERIAL))+
   geom_bar(stat = "identity", position = "dodge")+
   geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI, colour = "grey"),
@@ -503,8 +528,8 @@ fit_df <- df |>
 df |>
   select(MASS, STRAT, RAWMATERIAL, STRAT_mod) |>
   group_by(STRAT_mod) |>
-  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
-         Median_mid50 = quantile(log(MASS), probs = 0.5),
+  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75, na.rm = T),
+         Median_mid50 = quantile(log(MASS), probs = 0.5, na.rm = T),
          dist_to_lower75 = MASS - Quant_lower75,
          dist_to_median = MASS - Median_mid50) -> df_mod
 
@@ -606,8 +631,8 @@ df |>
   filter(ARTIFACTCLASS == "Core") |>
   select(MASS, STRAT, RAWMATERIAL, STRAT_mod) |>
   group_by(STRAT_mod) |>
-  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75),
-         Median_mid50 = quantile(log(MASS), probs = 0.5),
+  mutate(Quant_lower75 = quantile(log(MASS), probs = 0.75, na.rm = T),
+         Median_mid50 = quantile(log(MASS), probs = 0.5, na.rm = T),
          dist_to_lower75 = MASS - Quant_lower75,
          dist_to_median = MASS - Median_mid50) -> df_mod
 
@@ -1012,7 +1037,6 @@ df.scrap <- df.retouch |>
   filter(RETOUCHEDPIECETYPOLOGY == "SideScraper" | 
            RETOUCHEDPIECETYPOLOGY == "EndScraper" |
            RETOUCHEDPIECETYPOLOGY == "Side-EndScraper") |>
-  select(1:11,14:21, 33:43, 44:49) |>
   select("SCRAPERRETOUCHHEIGHT1", "SCRAPERRETOUCHHEIGHT2", "SCRAPERRETOUCHHEIGHT3",
          "SCRAPERRETOUCHANGLE1", "SCRAPERRETOUCHANGLE2", "SCRAPERRETOUCHANGLE3",
          "SCRAPERDORSALANGLE1", "SCRAPERDORSALANGLE2", "SCRAPERDORSALANGLE3",
@@ -1053,8 +1077,7 @@ scrap.red <- scrap.red |>
 
 ```{r}
 # model the amount of scraper utility
-scrap.red|>
-  filter(STRAT != "5") |>
+scrap.red |>
   ggplot(aes(x = STRAT, y = UTILITY, fill = RAWMATERIAL))+
   geom_boxplot()+
   geom_point(aes(color = "white"),
@@ -1073,7 +1096,6 @@ scrap.red|>
 
 # Model the amount of scraper retouch 
 scrap.red |>
-  filter(STRAT != "5") |>
   ggplot(aes(x = STRAT, y = log(RETOUCH), fill = RAWMATERIAL))+
   geom_boxplot() +
   geom_point(aes(color = "white"),
