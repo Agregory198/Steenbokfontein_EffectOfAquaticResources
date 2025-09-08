@@ -38,6 +38,7 @@ library(kableExtra)
 
 # To tidy the data
 library(tidyr)
+library(tidyverse)
 library(dplyr)
 library(forcats)
 library(tidybayes)
@@ -90,7 +91,7 @@ df_sum24 <- read.csv("AG_Summer2024_06_26_Final.csv") |>
          STRAT_mod = factor(STRAT_mod),
          RAWMATERIAL = factor(RAWMATERIAL))
 
-df_sum25 <- read.csv("AG_Summer2025_06_06.csv") |>
+df_sum25 <- read.csv("AG_Summer2025_SBF_final.csv") |>
   filter(RAWMATERIAL != "BWA UPPER 1" &
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
@@ -99,13 +100,99 @@ df_sum25 <- read.csv("AG_Summer2025_06_06.csv") |>
                             "Terrestrial", "Coastal")) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod),
+         RAWMATERIAL = factor(RAWMATERIAL)) |>
+  
+  select(-c(X))
+
+# Glenda's dataframe
+df_glenda <- read_csv("DataSheet_Glenda.csv")|>
+  mutate(STRAT = tolower(Layer),
+         
+         PLATFORMWIDTH = parse_number("Platform Width"),
+         PLATFORMTHICKNESS = parse_number("Platform Thickness"),
+         MAXLENGTH = parse_number("Maximum Length"),
+         TECHLENGTH = parse_number("Technological Length"),
+         MAXWIDTH = parse_number("Maximum Width"),
+         TECHWIDTH = parse_number("Technological Width"),
+         MAXTHICKNESS = parse_number("Thickness"),
+         MASS = parse_number("Mass"))
+
+df_glenda <- df_glenda[1:289,]
+
+df_glenda_flakes <- df_glenda |>
+  
+  add_column(OTHERUNIT = NA, .before = "Raw Material") |>
+
+  rename(SITE = Site, UNIT = Unit, NAMED_ID = `Other Name`,
+         RAWMATERIAL = `Raw Material`, CORTEX = `Cortex Percent`,
+         CORTEXTYPE = `Cortex Origin`, ARTIFACTCLASS = `Artifact class`,
+         COMPLETENESS = Complete, PLATFORM = `Platform?`,
+         FLAKEINITIATION = Initiated, FLAKETERMINATION = Termination,
+         FLAKEGEOMETRY = `Flake Geometry`, PLATFORMPREP = `Platform Preparation`,
+         PLATABRASION = PlatformAbrasion, 
+         STAGE = `Flaking Stage`) |>
+  
+  select(-c(Layer, Notes, Photo,
+            `Platform Width`:`Platform Thickness`, `Maximum Length`:Mass)) |>
+  
+  mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
+                      ifelse(STRAT == "3b", "3", 
+                             ifelse(STRAT == "5a", "5", STRAT))),
+         STRAT_mod = ifelse(STRAT %in% c("5"),
+                          "Terrestrial", "Coastal")) |>
+  mutate(STRAT = factor(STRAT),
+         STRAT_mod = factor(STRAT_mod),
+         RAWMATERIAL = factor(RAWMATERIAL)) |>
+  
+  relocate(STRAT, .before = "UNIT") |>
+  relocate(CORTEXTYPE, .before = "ARTIFACTCLASS")
+  
+  
+
+# Leano's Dataframe
+df_leano <- read_csv("DataSheet_Leano.csv") |>
+  
+  rename(SITE = Site, STRAT = Layer, UNIT = Unit, NAMED_ID = `Other Name`,
+         RAWMATERIAL = `Raw Material`, CORTEX = `Cortex Percent`,
+         ARTIFACTCLASS = `Artifact class`, CORTEXTYPE = `Cortex Origin`,
+         COMPLETENESS = Complete, PLATFORM = `Platform?`,
+         FLAKEINITIATION = Initiated, FLAKETERMINATION = Termination,
+         FLAKEGEOMETRY = `Flake Geometry`, PLATFORMPREP = `Platform Preparation`,
+         PLATABRASION = `PlatformAbrasion`, PLATFORMWIDTH = `Platform Width`,
+         PLATFORMTHICKNESS = `Platform Thickness`, STAGE = `Flaking Stage`,
+         MAXLENGTH = `Maximum Length`, TECHLENGTH = `Technological Length`,
+         MAXWIDTH = `Maximum Width`, TECHWIDTH = `Technological Width`,
+         MAXTHICKNESS = Thickness, MASS = Mass) |>
+  
+  select(-c(`...2`,Notes:Photo))
+
+df_leano_flakes <- df_leano |>
+  
+  add_column(OTHERUNIT = NA, .before = "RAWMATERIAL") |>
+  
+  mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
+                    ifelse(STRAT == "3b", "3", 
+                           ifelse(STRAT == "5a", "5", STRAT))),
+          STRAT_mod = ifelse(STRAT %in% c("5"),
+                        "Terrestrial", "Coastal")) |>
+  mutate(STRAT = factor(STRAT),
+         STRAT_mod = factor(STRAT_mod),
          RAWMATERIAL = factor(RAWMATERIAL))
+
+
+
+
+df_leano_flakes <- df_leano_flakes[1:421,] |>
+  relocate(CORTEXTYPE, .before = "ARTIFACTCLASS")
+  
+
 
 df <- rbind(df_sum24, df_sum25) |>
   mutate(TECHLENGTH = as.numeric(TECHLENGTH),
          MAXWIDTH = as.numeric(MAXWIDTH),
          MAXTHICKNESS = as.numeric(MAXTHICKNESS)) |>
   filter(STRAT %in% c("1", "2", "3", "4a", "4b", "5"))
+
 
 # take average core flake scar length
 df |>
@@ -116,7 +203,10 @@ df |>
 # Subset data by flakes and flake variables
 df.flakes <- df |>
   filter(ARTIFACTCLASS == "Flake" & COMPLETENESS == "Complete") |>
-  select(1:11,33:35,38,48:53,64:69,STRAT_mod)|>
+  select(1:11,33:35,48:53,64:69,STRAT_mod) |>
+  
+  rbind(df_glenda_flakes, df_leano_flakes) |>
+  
   mutate(Utility = MAXWIDTH*MAXLENGTH,
          Reduction = ifelse(
            RAWMATERIAL == "Opaline/CCS", 
@@ -764,20 +854,23 @@ df.flakes |>
 df.flakes |>
   select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
   group_by(STRAT, RAWMATERIAL) |>
+  na.omit()|>
   summarize(Utility_ave = mean(Utility),
             Red_ave = mean(Reduction)) |>
   ggplot(aes(x = Red_ave, y = Utility_ave, 
                    color = STRAT, label = STRAT))+
     geom_point(size = 2)+
     facet_wrap(~RAWMATERIAL)+
-    geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
+    geom_text(aes(fontface = 2),hjust = 1.1, vjust = -0.2)+
   
   
     xlab("Reduction Intensity")+ylab("Flake Utility")+
-    theme(legend.title = element_blank())+
+    theme(legend.title = element_blank(), text = element_text(size = 15))+
+    #theme_minimal()+
     guides(color = "none")+
     scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
              "4a" = "forestgreen", "4b" = "forestgreen"))
+
 
 ```
 
@@ -848,12 +941,15 @@ flake.vr |>
 ```{r}
 # Model the percent of volume removed against Strat conditioned by material
 cores.vr |>
-  filter(STRAT != "5") |>
   ggplot(aes(x = STRAT, y = volume_removed, fill = RAWMATERIAL))+
   geom_boxplot() +
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4)+
   ylab("Reduction Intensity")+xlab("Layer")+
   
-  theme_classic(base_size = 18)+
+  theme_minimal(base_size = 18)+
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
@@ -866,12 +962,15 @@ cores.vr |>
 
 # Model the amount of volume remaining (V) against Strat conditioned by material  
 cores.vr |>
-  filter(STRAT != "5") |>
   ggplot(aes(x = STRAT, y = log(V), fill = RAWMATERIAL))+
-  geom_boxplot() +
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4) +
   ylab("log-Utility")+xlab("Layer")+
   
-  theme_classic(base_size = 18)+
+  theme_minimal(base_size = 18)+
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
@@ -887,7 +986,6 @@ cores.vr |>
 # High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
 # Low reduction intensity and low utility means not focused on flake production?
 cores.vr |>
-  #filter(STRAT != "5") |>
   group_by(STRAT, RAWMATERIAL) |>
   summarize(volume_ave = mean(V),
             sdi_ave = mean(SDI),
@@ -900,7 +998,7 @@ cores.vr |>
   
   
   xlab("Core Reduction Intensity")+ylab("log-Core Utility")+
-  theme(legend.title = element_blank())+
+  theme(legend.title = element_blank(), text = element_text(size = 15))+
   guides(color = "none")+
   scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
            "4a" = "forestgreen", "4b" = "forestgreen"))
@@ -958,10 +1056,14 @@ scrap.red <- scrap.red |>
 scrap.red|>
   filter(STRAT != "5") |>
   ggplot(aes(x = STRAT, y = UTILITY, fill = RAWMATERIAL))+
-  geom_boxplot() +
+  geom_boxplot()+
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4) +
   ylab("Utility")+xlab("Layer")+
   
-  theme_classic(base_size = 18)+
+  theme_minimal(base_size = 18)+
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
@@ -974,9 +1076,13 @@ scrap.red |>
   filter(STRAT != "5") |>
   ggplot(aes(x = STRAT, y = log(RETOUCH), fill = RAWMATERIAL))+
   geom_boxplot() +
+  geom_point(aes(color = "white"),
+             position = position_jitterdodge(jitter.width = 0.09,
+                                             jitter.height = 0, dodge.width = 0.75),
+             alpha = 0.4) +
   ylab("log-Retouch Intensity")+xlab("Layer")+
   
-  theme_classic(base_size = 18)+
+  theme_minimal(base_size = 18)+
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
@@ -988,9 +1094,9 @@ scrap.red |>
 ```{r fig-Figure10, fig.cap="Scraper utility to retouch intensity for all scrapers at SBF colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure shows the opposite pattern than we would expect."}
 scrap.red |>
   group_by(STRAT) |>
-  filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
+  filter(RAWMATERIAL %in% c("Quartz", "Silcrete")) |>
   summarize(Retouch_ave = mean(RETOUCH),
-            Utility_ave = mean(UTILITY)) |>
+            Utility_ave = mean(UTILITY))|>
   ggplot(aes(x = Retouch_ave, y = Utility_ave, 
              color = STRAT, label = STRAT))+
   geom_point(size = 2)+
@@ -998,7 +1104,7 @@ scrap.red |>
   
   
   xlab("Scraper Retouch Intensity")+ylab("Scraper Utility")+
-  theme(legend.title = element_blank())+
+  theme(legend.title = element_blank(), text = element_text(size = 15))+
   guides(color = "none")+
   scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
            "4a" = "forestgreen", "4b" = "forestgreen"))
