@@ -17,6 +17,6 @@ This is a multivariate project that examines whether hunter-gatherer technologie
 
 ## Author
 
-Alex Gregory 
+Alex Gregory
 PhD Candidate | Archaeology | Quantitative Analyst | Data Science | Bayesian Methods  
 arg9496@nyu.edu
