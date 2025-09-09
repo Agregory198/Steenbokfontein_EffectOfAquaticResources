@@ -13,7 +13,7 @@ This is a multivariate project that examines whether hunter-gatherer technologie
 
 - `data/`: contains input data for the R quarto document
 - `code/`: all analysis scripts required to re-run the project
-- `results/`: figures, tables, or output files
+- `results/`: figures, tables, and other output files
 
 ## Author
 
