@@ -79,6 +79,9 @@ scraper_red <- function(L, D, a, b){
 ```
 
 ```{r ReadData}
+#| message: false
+#| warning: false
+
 # Read and clean data
 df_sum24 <- read.csv("AG_Summer2024_06_26_Final.csv") |>
   select(-c('X')) |>
@@ -86,7 +89,8 @@ df_sum24 <- read.csv("AG_Summer2024_06_26_Final.csv") |>
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
                         ifelse(STRAT == "3b", "3", STRAT)),
-         STRAT_mod = ifelse(STRAT %in% c("5"), "Terrestrial", "Coastal")) |>
+         STRAT_mod = ifelse(STRAT %in% c("5"), "Terrestrial",
+                     ifelse(STRAT %in% c("4a", "4b"), "Mixed", "Coastal"))) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod))
 
@@ -95,8 +99,8 @@ df_sum25 <- read.csv("AG_Summer2025_SBF_final.csv") |>
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
                         ifelse(STRAT == "3b", "3", STRAT)),
-         STRAT_mod = ifelse(STRAT %in% c("5"),
-                            "Terrestrial", "Coastal")) |>
+         STRAT_mod = ifelse(STRAT %in% c("5"),"Terrestrial",
+                     ifelse(STRAT %in% c("4a", "4b"), "Mixed", "Coastal"))) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod)) |>
   
@@ -136,8 +140,8 @@ df_glenda_flakes <- df_glenda |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
                       ifelse(STRAT == "3b", "3", 
                              ifelse(STRAT == "5a", "5", STRAT))),
-         STRAT_mod = ifelse(STRAT %in% c("5"),
-                          "Terrestrial", "Coastal")) |>
+         STRAT_mod = ifelse(STRAT %in% c("5"),"Terrestrial",
+                     ifelse(STRAT %in% c("4a", "4b"), "Mixed", "Coastal"))) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod)) |>
   
@@ -170,8 +174,8 @@ df_leano_flakes <- df_leano |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
                     ifelse(STRAT == "3b", "3", 
                            ifelse(STRAT == "5a", "5", STRAT))),
-          STRAT_mod = ifelse(STRAT %in% c("5"),
-                        "Terrestrial", "Coastal")) |>
+          STRAT_mod = ifelse(STRAT %in% c("5"),"Terrestrial",
+                     ifelse(STRAT %in% c("4a", "4b"), "Mixed", "Coastal"))) |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod))
 
@@ -210,7 +214,8 @@ df <- rbind(df_sum24, df_sum25) |>
                          CORTEX))))) |>
   
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete"),
-         CORTEX != "\\")
+         CORTEX != "\\",
+         MAXWIDTH < 1250)
 
 
 # take average core flake scar length
@@ -263,6 +268,7 @@ sbf_un <- read.csv("SBF_ToolType_unmod.csv")
 # Create summary table
 
 df |>
+  mutate(across(where(is.factor), droplevels)) |>
   select(STRAT, RAWMATERIAL, ARTIFACTCLASS) |>
   mutate(ARTIFACTCLASS = ifelse(ARTIFACTCLASS ==
                                   "RetouchedTool", "Retouched tools", ARTIFACTCLASS),
@@ -280,9 +286,13 @@ df |>
   ) |>
   modify_header(label = "") -> tab1
 tab1
+
+#gtsave(tab1, "Table1.png")
 ```
 
 ```{r RMGGplot}
+#| message: false
+#| warning: false
 
 df |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
@@ -302,7 +312,9 @@ df |>
   guides(fill = "none")+
   theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2)))) -> RM_plot1
+                         c(rep("sky Blue",3),
+                           rep("dark cyan",2),
+                           rep("green", 1)))) -> RM_plot1
 
 df |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
@@ -321,18 +333,24 @@ df |>
   scale_fill_viridis_d()+
   theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",1),rep("Forest Green",1)),
+                         c(rep("sky Blue",1),
+                           rep("dark cyan",1),
+                           rep("green", 1)),
                        angle = 45, hjust = 1)) -> RM_plot2
 
 ```
 
 ```{r fig-Figure1, fig.cap="Proportion of three main lithic tool types (cores, flakes, and retouched tools) conditioned by raw material type for layers grouped by diet (A) and all layesr (B). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
 
+png("figures/fig5.png", width = 290, height = 120, units = "mm", res = 300)
 ggarrange(
   RM_plot2, RM_plot1,
   align = "h", labels = c("A", "B"),
   common.legend = TRUE
 )
+
+dev.off()
+
 ```
 
 ```{r CortexGGplot}
@@ -415,13 +433,16 @@ df_cortex_boot |>
                 position = "dodge")+
   labs(fill = "",
        x = "Layer",
-       y = "Cortical-to-Noncortical Ratios") +
+       y = "Cortical-to-Noncortical") +
   theme_minimal()+
   guides(colour = "none")+
   scale_fill_viridis_d()+
   theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2)))) -> cort_plot1
+                         c(rep("sky Blue",3),
+                           rep("dark cyan",2),
+                           rep("green", 1))),
+        text = element_text(size= 20)) -> cort_plot1
   
 ################## Bootstrap for modified Strats #####################
 iter = 100
@@ -496,24 +517,32 @@ df_cortex_boot |>
                 position = "dodge")+
   labs(fill = "",
        x = "Grouped Layers",
-       y = "Cortical-to-Noncortical Ratios") +
+       y = "Cortical-to-Noncortical") +
   theme_minimal()+
   guides(colour = "none")+
   scale_fill_viridis_d()+
   theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",1),rep("Forest Green",1)))) -> cort_plot2
+                         c(rep("sky Blue",1),
+                           rep("dark cyan",1),
+                           rep("green", 1))),
+        text = element_text(size= 20)) -> cort_plot2
 
 rm(df_cortex_boot)
 ```
 
 ```{r fig-Figure2, fig.cap="Bar plot that shows the cortical-to-noncortical ratios scaled by artifact's surface area for layers grouped by diet (A) and all layers (B). Low ratio implies greater non-cortical coverage; high ratios imply greater cortical coverage. The error bars reflect a 95% confidence interval derived from bootstrap sampling. Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
-  
+
+png("figures/fig6.png", width = 290, height = 120, units = "mm", res = 300)
+
 ggarrange(
   cort_plot2, cort_plot1,
   align = "h", labels = c("A", "B"),
+  font.label = list(size = 25, face = "bold"),
   common.legend = TRUE
 )
+
+dev.off()
 ```
 
 ```{r AllMass}
@@ -534,6 +563,8 @@ df |>
          dist_to_median = MASS - Median_mid50) -> df_mod
 
 hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
+  distinct(Median_mid50, Quant_lower75)
+hline_mix <- df_mod |> filter(STRAT_mod == "Mixed") |>
   distinct(Median_mid50, Quant_lower75)
 hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
   distinct(Median_mid50, Quant_lower75)
@@ -560,6 +591,7 @@ fit_df |>
              color = "light green", lty = 2)+
   
   xlab("Grouped Layers")+ylab("log-Artifact Mass")+
+  labs(fill = "")+
   ylim(-5,5)+
   theme_minimal()+
   theme(legend.title = element_blank())+
@@ -567,7 +599,10 @@ fit_df |>
   guides(color = "none")+
     theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",1),rep("Forest Green",1))))+
+                         c(rep("skyblue",1),
+                           rep("darkcyan",1),
+                           rep("lightgreen", 1))),
+          text = element_text(size = 20))+
   scale_fill_viridis_d() -> Art_mass_freqPlot1
 
 
@@ -580,17 +615,21 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "skyblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["Quant_lower75"]],
+             color = "darkcyan", lty = 2)+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
     theme_minimal()+
   theme(legend.title = element_blank())+
   xlab("Layers")+ylab("log-Artifact Mass")+
+  labs(fill = "")+
   ylim(-5,5)+
   theme_minimal()+
   theme(legend.title = element_blank())+
@@ -598,7 +637,10 @@ fit_df |>
   guides(color = "none")+
     theme(axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
+                         c(rep("skyblue",3),
+                           rep("darkcyan",2),
+                           rep("lightgreen", 1))),
+          text = element_text(size = 20))+
   scale_fill_viridis_d() -> Art_mass_freqPlot2
 
 
@@ -607,12 +649,16 @@ fit_df |>
 
 ```{r fig-Figure3, fig.cap="Boxplot of log-mass for layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
 
+png("figures/fig7.png", width = 290, height = 120, units = "mm", res = 300)
 
 ggarrange(
   Art_mass_freqPlot1,Art_mass_freqPlot2,
   align = "h", labels = c("A", "B"),
+  font.label = list(size = 25, face = "bold"),
   common.legend = TRUE
 )
+
+dev.off()
 ```
 
 ```{r CoreMass}
@@ -638,6 +684,8 @@ df |>
 
 hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
   distinct(Median_mid50, Quant_lower75)
+hline_mix <- df_mod |> filter(STRAT_mod == "Mixed") |>
+  distinct(Median_mid50, Quant_lower75)
 hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
   distinct(Median_mid50, Quant_lower75)
 
@@ -652,13 +700,16 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "skyblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["Quant_lower75"]], 
+             color = "darkcyan", lty = 2)+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
   
     theme_minimal()+
@@ -669,7 +720,10 @@ fit_df |>
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",1),rep("Forest Green",1))))+
+                         c(rep("skyblue",1),
+                           rep("darkcyan",1),
+                           rep("lightgreen", 1))),
+        text = element_text(size = 20))+
   guides(color = "none")+
   scale_fill_viridis_d() -> Core_mass_freqPlot1
 
@@ -683,13 +737,16 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "skyblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["Quant_lower75"]], 
+             color = "darkcyan", lty = 2)+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
     theme_minimal()+
   theme(legend.title = element_blank())+
@@ -699,19 +756,26 @@ fit_df |>
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
+                         c(rep("skyblue",3),
+                           rep("darkcyan",2),
+                           rep("lightgreen", 1))),
+        text = element_text(size = 20))+
   guides(color = "none")+
   scale_fill_viridis_d() -> Core_mass_freqPlot2
 ```
 
 ```{r fig-Figure4, fig.cap="Boxplot of log-mass for only cores in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
 
+png("figures/fig8.png", width = 290, height = 120, units = "mm", res = 300)
 
 ggarrange(
   Core_mass_freqPlot1, Core_mass_freqPlot2,
   align = "h", labels = c("A", "B"),
+  font.label = list(size = 25, face = "bold"),
   common.legend = TRUE
 )
+
+dev.off()
 ```
 
 ```{r CoreLength}
@@ -737,6 +801,8 @@ df |>
 
 hline_aq <- df_mod |> filter(STRAT_mod == "Coastal") |>
   distinct(Median_mid50, Quant_lower75)
+hline_mix <- df_mod |> filter(STRAT_mod == "Mixed") |>
+  distinct(Median_mid50, Quant_lower75)
 hline_ter <- df_mod |> filter(STRAT_mod == "Terrestrial") |>
   distinct(Median_mid50, Quant_lower75)
 
@@ -750,13 +816,16 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "skyblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["Quant_lower75"]],
+             color = "darkcyan", lty = 2)+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
   
   xlab("Grouped Layers")+ylab("Core Length")+
@@ -764,7 +833,10 @@ fit_df |>
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",1),rep("Forest Green",1))))+
+                         c(rep("skyblue",1),
+                           rep("darkcyan",1),
+                           rep("lightgreen", 1))),
+        text = element_text(size = 20))+
   guides(color = "none")+
   scale_fill_viridis_d() -> Core_length_freqPlot1
 
@@ -778,53 +850,66 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-    geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "lightblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["Quant_lower75"]],
+             color = "darkcyan")+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
   xlab("Layers")+ylab("Core Length")+
   theme_minimal()+
   theme(legend.title = element_blank(),
         axis.text.x = 
           element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
+                         c(rep("skyblue",3),
+                           rep("darkcyan",2),
+                           rep("lightgreen", 1))),
+        text = element_text(size = 20))+
   guides(color = "none")+
   scale_fill_viridis_d() -> Core_length_freqPlot2
 ```
 
 ```{r fig-Figure5, fig.cap="Boxplot of the maximum core length in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
 
+png("figures/fig9.png", width = 290, height = 120, units = "mm", res = 300)
+
 ggarrange(
   Core_length_freqPlot1, Core_length_freqPlot2,
   align = "h", labels = c("A", "B"),
+  font.label = list(size = 25, face = "bold"),
   common.legend = TRUE
 )
+
+dev.off()
 ```
 
 ## Toolkit composition
 
 ```{r fig-Figure6, fig.cap="Percent of retouched tools to lithic density at SBF. Higher formal tools and lower lithic density implies higher mobility; lower formal tools and higher lithic density implies lower mobility. These data suggest layers 1, 2, and 3 are asscoaited with increased mobility and layers 4a and 4b are associated with lower mobility."}
 
-
+png("figures/fig10.png", width = 180, height = 120, units = "mm", res = 300)
+# Data pulled from Jerardino, 2022
 sbf_df |>
-  filter(Layer != "5") |>
   mutate(Layer = ifelse(Layer %in% c("3a", "3b"), "3", Layer)) |>
   group_by(Layer) |>
   summarize(Tool_sum = sum(Count)) |>
-  mutate(Lithic_Dens = c(8.8, 11.7, 16, 30.7, 18.7),
+  mutate(Lithic_Dens = c(602.7, 850.9,
+                         ((819+1861)/((819/1863.6)+(1861/1094.7))),
+                         2904.3, 1545.6, 2788.5),
          Dep_rate = abs(c(((2.45+2)/2)-((2.6+2.2)/2),
                       ((2.6+2.2)/2)-((3+2.4)/2),
                       ((3+2.4)/2)-((3.5+2.7)/2),
                       ((3.5+2.7)/2)-((5+3)/2),
-                      ((5+3)/2)-(4.6)))) |>
+                      ((5+3)/2)-(4.6),
+                      ((9.7+4.6)/2)-(9.7)))) |>
   left_join(
     
     sbf_un |>
-      filter(Layer != "5") |>
       mutate(Layer = ifelse(Layer %in% c("3a", "3b"), "3", Layer)) |>
       group_by(Layer) |>
       summarize(Deb_sum = sum(Count)) 
@@ -834,20 +919,24 @@ sbf_df |>
          Lithic_std = Lithic_Dens/Dep_rate) |>
   
   ggplot(aes(x = Lithic_std, y = Tool_Perc, color = Layer, label = Layer))+
-  geom_point(size = 2)+
-  geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0)+
+  geom_point(size = 3)+
+  geom_text(aes(fontface = 2),hjust = 1.5, vjust = 0, size = 5)+
   xlab("Lithic Density/Deposition Rate")+ylab("Formal Tool Percent")+
   theme_minimal()+
+  theme(text = element_text(size = 20))+
   guides(color = "none")+
-  scale_color_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-                                "4a" = "forestgreen", "4b" = "forestgreen"))
-  #annotate(geom = "text", x = 63, y = 5.2, label = "Lower Mobility")+
-  #annotate(geom = "text", x = 25, y = 8.8, label = "Higher Mobility")
+  scale_color_manual(values = c("1" = "skyblue", "2" = "skyblue", "3" = "skyblue",
+                                "4a" ="darkcyan", "4b" = "darkcyan",
+                                "5" = "lightgreen"))
+
+dev.off()
 ```
 
 ## Flake utility and reduction intensity
 
 ```{r flakeUtRed}
+#| warning: false
+#| message: false
 
 df.flakes |>
   select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
@@ -867,14 +956,17 @@ df.flakes |>
     xlab("Reduction Intensity")+ylab("Utility")+
     theme(legend.title = element_blank())+
     guides(color = "none")+
-    scale_color_manual(values = c("Coastal" = "blue", 
-                                "Terrestrial" = "Forest Green")) -> FlakeUtRed1
+    scale_color_manual(values = c("Coastal" = "skyblue", 
+                                  "Mixed" = "darkcyan",
+                                "Terrestrial" = "lightgreen")) -> FlakeUtRed1
 ###########################
 
 
 ```
 
 ```{r fig-Figure7, fig.cap="Flake utility to reduction intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, we would expect greater flake utility nd reduction intensity.s These pattersn fail to support this hypothesis."}
+
+png("figures/fig11.png", width = 180, height = 120, units = "mm", res = 300)
 
 df.flakes |>
   select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
@@ -890,13 +982,15 @@ df.flakes |>
   
   
     xlab("Reduction Intensity")+ylab("Flake Utility")+
+    theme_light()+
     theme(legend.title = element_blank(), text = element_text(size = 15))+
-    #theme_minimal()+
     guides(color = "none")+
-    scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-             "4a" = "forestgreen", "4b" = "forestgreen"))
+    scale_colour_manual(values = c("1" = "skyblue", "2" = "skyblue",
+                                   "3" = "skyblue",
+                                   "4a" = "darkcyan", "4b" = "darkcyan",
+                                   "5" = "lightgreen"))
 
-
+dev.off()
 ```
 
 ## Retouched flake utility to retouch intensity
@@ -915,6 +1009,9 @@ df.retouch |>
 ```
 
 ```{r fig-Figure8, fig.cap="Flake utility to retouch intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coaastal (blue) diets. Our initial hypothesis predicts that, as hunter-gatherers focused on coastal resources, flake utility should increase and retouch should decrease. Quartzite and silcrete fail to support are hypothesis, and quartz shows an inverse pattern to our expectations."}
+
+png("figures/fig12.png", width = 180, height = 120, units = "mm", res = 300)
+
 ret_int |>
   group_by(STRAT, RAWMATERIAL) |>
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
@@ -928,10 +1025,16 @@ ret_int |>
   
   
   xlab("Flake Retouch Intensity")+ylab("Flake Utility")+
-  theme(legend.title = element_blank())+
+  theme_light()+
+  theme(legend.title = element_blank(),
+        text = element_text(size = 15))+
   guides(color = "none")+
-  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-           "4a" = "forestgreen", "4b" = "forestgreen"))
+  scale_colour_manual(values = c("1" = "skyblue", "2" = "skyblue",
+                                 "3" = "skyblue",
+                                 "4a" = "darkcyan", "4b" = "darkcyan",
+                                 "5" = "lightgreen"))
+
+dev.off()
 ```
 
 ## Cores
@@ -963,53 +1066,14 @@ flake.vr |>
   select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse)-> cores.vr
 ```
 
-```{r}
-# Model the percent of volume removed against Strat conditioned by material
-cores.vr |>
-  ggplot(aes(x = STRAT, y = volume_removed, fill = RAWMATERIAL))+
-  geom_boxplot() +
-  geom_point(aes(color = "white"),
-             position = position_jitterdodge(jitter.width = 0.09,
-                                             jitter.height = 0, dodge.width = 0.75),
-             alpha = 0.4)+
-  ylab("Reduction Intensity")+xlab("Layer")+
-  
-  theme_minimal(base_size = 18)+
-  theme(legend.title = element_blank(),
-        axis.text.x = 
-          element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
-  guides(color = "none")+
-  scale_fill_viridis_d()
-  
-  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-           "4a" = "forestgreen", "4b" = "forestgreen"))
-
-# Model the amount of volume remaining (V) against Strat conditioned by material  
-cores.vr |>
-  ggplot(aes(x = STRAT, y = log(V), fill = RAWMATERIAL))+
-  geom_boxplot()+
-  geom_point(aes(color = "white"),
-             position = position_jitterdodge(jitter.width = 0.09,
-                                             jitter.height = 0, dodge.width = 0.75),
-             alpha = 0.4) +
-  ylab("log-Utility")+xlab("Layer")+
-  
-  theme_minimal(base_size = 18)+
-  theme(legend.title = element_blank(),
-        axis.text.x = 
-          element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
-  guides(color = "none")+
-  scale_fill_viridis_d()
-  
-```
-
 ```{r fig-Figure9, fig.cap="Core utility to core reduction intensity colored by terrestrial (green) and coaastal (blue) diets. Due to sample size constraints, this figure is based on quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. There is no evidence too support our initial hypothesis."}
 # Tells us:
 # High reduction intensity and low utility is more mobile
 # High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
 # Low reduction intensity and low utility means not focused on flake production?
+
+png("figures/fig13.png", width = 180, height = 120, units = "mm", res = 300)
+
 cores.vr |>
   group_by(STRAT, RAWMATERIAL) |>
   summarize(volume_ave = mean(V),
@@ -1023,10 +1087,16 @@ cores.vr |>
   
   
   xlab("Core Reduction Intensity")+ylab("log-Core Utility")+
-  theme(legend.title = element_blank(), text = element_text(size = 15))+
+  theme_light()+
+  theme(legend.title = element_blank(), 
+        text = element_text(size = 15))+
   guides(color = "none")+
-  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-           "4a" = "forestgreen", "4b" = "forestgreen"))
+  scale_colour_manual(values = c("1" = "skyblue", "2" = "skyblue",
+                                 "3" = "skyblue",
+                                 "4a" = "darkcyan", "4b" = "darkcyan",
+                                 "5" = "lightgreen"))
+
+dev.off()
 ```
 
 ## Scraper utility and retouch intensity
@@ -1075,59 +1145,31 @@ scrap.red <- scrap.red |>
          MASS = df.scrap$MASS)
 ```
 
-```{r}
-# model the amount of scraper utility
-scrap.red |>
-  ggplot(aes(x = STRAT, y = UTILITY, fill = RAWMATERIAL))+
-  geom_boxplot()+
-  geom_point(aes(color = "white"),
-             position = position_jitterdodge(jitter.width = 0.09,
-                                             jitter.height = 0, dodge.width = 0.75),
-             alpha = 0.4) +
-  ylab("Utility")+xlab("Layer")+
-  
-  theme_minimal(base_size = 18)+
-  theme(legend.title = element_blank(),
-        axis.text.x = 
-          element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
-  guides(color = "none")+
-  scale_fill_viridis_d()
-
-# Model the amount of scraper retouch 
-scrap.red |>
-  ggplot(aes(x = STRAT, y = log(RETOUCH), fill = RAWMATERIAL))+
-  geom_boxplot() +
-  geom_point(aes(color = "white"),
-             position = position_jitterdodge(jitter.width = 0.09,
-                                             jitter.height = 0, dodge.width = 0.75),
-             alpha = 0.4) +
-  ylab("log-Retouch Intensity")+xlab("Layer")+
-  
-  theme_minimal(base_size = 18)+
-  theme(legend.title = element_blank(),
-        axis.text.x = 
-          element_text(colour = 
-                         c(rep("Blue",3),rep("Forest Green",2))))+
-  guides(color = "none")+
-  scale_fill_viridis_d()
-```
-
 ```{r fig-Figure10, fig.cap="Scraper utility to retouch intensity for all scrapers at SBF colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure shows the opposite pattern than we would expect."}
+
+png("figures/fig14.png", width = 180, height = 120, units = "mm", res = 300)
+
 scrap.red |>
-  group_by(STRAT) |>
+  group_by(STRAT, RAWMATERIAL) |>
   filter(RAWMATERIAL %in% c("Quartz", "Silcrete")) |>
   summarize(Retouch_ave = mean(RETOUCH),
             Utility_ave = mean(UTILITY))|>
   ggplot(aes(x = Retouch_ave, y = Utility_ave, 
              color = STRAT, label = STRAT))+
-  geom_point(size = 2)+
-  geom_text(aes(fontface = 2),hjust = -0.2, vjust = -0.5)+
+  geom_point(size = 3)+
+  facet_grid(~RAWMATERIAL)+
+  geom_text(aes(fontface = 2.5),hjust = -0.2, vjust = -0.5)+
   
   
   xlab("Scraper Retouch Intensity")+ylab("Scraper Utility")+
-  theme(legend.title = element_blank(), text = element_text(size = 15))+
+  theme_light()+
+  theme(legend.title = element_blank(),
+        text = element_text(size = 17))+
   guides(color = "none")+
-  scale_colour_manual(values = c("1" = "blue", "2" = "blue", "3" = "blue",
-           "4a" = "forestgreen", "4b" = "forestgreen"))
+  scale_colour_manual(values = c("1" = "skyblue", "2" = "skyblue",
+                                 "3" = "skyblue",
+                                 "4a" = "darkcyan", "4b" = "darkcyan",
+                                 "5" = "lightgreen"))
+
+dev.off()
 ```
