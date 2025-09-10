@@ -1182,3 +1182,27 @@ scrap.red |>
 
 dev.off()
 ```
+
+## Adzes
+
+```{r}
+df_adze <- df |>
+  as_tibble() |>
+  filter(RETOUCHEDPIECETYPOLOGY == "Adze") |>
+  select(STRAT, RAWMATERIAL, SCARCOUNT,
+         MAXLENGTH, MAXWIDTH, MAXTHICKNESS, MASS) |>
+  mutate(SA = 2*((MAXLENGTH*MAXWIDTH)+
+                   (MAXTHICKNESS*MAXWIDTH)+
+                   (MAXTHICKNESS*MAXLENGTH)),
+         SDI = SA/SCARCOUNT)
+
+df_adze |>
+  ggplot(aes(x = STRAT, y = SDI))+
+  geom_boxplot()
+
+df_adze |>
+  ggplot(aes(x = STRAT, y = log(MASS)))+
+  geom_boxplot()
+
+TukeyHSD(aov(lm(SDI~STRAT, data = df_adze)))
+```
