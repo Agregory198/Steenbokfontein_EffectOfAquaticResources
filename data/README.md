@@ -1,5 +1,5 @@
 # Data
-This file contains the data needed to read into the 'Steenbokfontein_EffectOfAquaticResources.rproj'
+This file contains the data needed to read into the 'Steenbokfontein_EffectOfAquaticResources.Rproj'
 
 *AG_Summer2024_SBF_Final.csv* and *AG_Summer_2025_SBF_Final.csv* are the primary databases that were collected during the summer 2024 and 2025, respectively.
 
