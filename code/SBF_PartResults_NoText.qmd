@@ -551,6 +551,105 @@ dev.off()
 fit_df <- df |>
     mutate(log_MASS = log(MASS))
 
+
+# Cretae priors to assign to Bayesian model for two scenarios: grouped and separate layers
+# Gamma prior for grouped layers and Mass
+Gamma_Prior_Mass_Grouped <- prior(normal(3,0.5), class = "Intercept")+
+  
+  prior(normal(1,0.5), class = "b", coef = "STRAT_modTerrestrial")+
+  prior(normal(3,1), class = "b", coef = "RAWMATERIALQuartzite")+
+  prior(normal(1,1), class = "b", coef = "RAWMATERIALSilcrete")+
+  prior(normal(2,1), class = "b",
+        coef = "STRAT_modTerrestrial:RAWMATERIALQuartzite")+
+  prior(normal(1,1), class = "b",
+        coef = "STRAT_modTerrestrial:RAWMATERIALSilcrete")+
+  
+  prior(gamma(2, 0.5), class = "shape")
+
+# Gamma prior for individual layers and Mass
+Gamma_Prior_Mass_Ind <- prior(normal(3,0.5), class = "Intercept")+
+  
+  prior(normal(2,1), class = "b", coef = "STRAT2")+
+  prior(normal(2,1), class = "b", coef = "STRAT3")+
+  prior(normal(1,1), class = "b", coef = "STRAT4a")+
+  prior(normal(1,1), class = "b", coef = "STRAT4b")+
+  prior(normal(1,1), class = "b", coef = "STRAT5")+
+  
+  prior(normal(3,0.5), class = "b", coef = "RAWMATERIALQuartzite")+
+  prior(normal(0,1), class = "b", coef = "RAWMATERIALSilcrete")+
+  prior(normal(3,0.5), class = "b",
+        coef = "STRAT2:RAWMATERIALQuartzite")+
+  prior(normal(0,0.5), class = "b",
+        coef = "STRAT2:RAWMATERIALSilcrete")+
+  prior(normal(3,0.5), class = "b",
+        coef = "STRAT3:RAWMATERIALQuartzite")+
+  prior(normal(1,1), class = "b",
+        coef = "STRAT3:RAWMATERIALSilcrete")+
+  prior(normal(1,1), class = "b",
+        coef = "STRAT4a:RAWMATERIALQuartzite")+
+  prior(normal(2,1), class = "b",
+        coef = "STRAT4a:RAWMATERIALSilcrete")+
+  prior(normal(1,1), class = "b",
+        coef = "STRAT4b:RAWMATERIALQuartzite")+
+  prior(normal(2,1), class = "b",
+        coef = "STRAT4b:RAWMATERIALSilcrete")+
+  prior(normal(2,1), class = "b",
+        coef = "STRAT5:RAWMATERIALQuartzite")+
+  prior(normal(2,1), class = "b",
+        coef = "STRAT5:RAWMATERIALSilcrete")+
+  
+  prior(gamma(2, 0.5), class = "shape")
+```
+
+```{r fitAllMass}
+fit_mass_all_grouped <- brm(
+  MASS ~ STRAT_mod*RAWMATERIAL,
+  data = fit_df,
+  family = Gamma(link = "log"),
+  prior = Gamma_Prior_Mass_Grouped,
+  cores = getOption("mc.cores", parallel::detectCores()),
+  chains = 4,
+  iter = 4000,
+  seed = 2325777
+)
+
+fit_mass_all_ind <- brm(
+  MASS ~ STRAT*RAWMATERIAL,
+  data = fit_df,
+  family = Gamma(link = "log"),
+  prior = Gamma_Prior_Mass_Ind,
+  cores = getOption("mc.cores", parallel::detectCores()),
+  chains = 4,
+  iter = 4000,
+  seed = 2325778
+)
+```
+
+### Supp 1
+
+```{r tab-AllMassGroup}
+emmeans_res <- emmeans(fit_mass_all_grouped, ~ STRAT_mod*RAWMATERIAL)
+
+# Pairwise comparisons with Bayesian credible intervals
+
+pairs1 <- pairs(emmeans_res) |>
+  as_tibble() |>
+  rename(Contrast = contrast,
+         Estimate = estimate,
+         `Lower CI` = lower.HPD,
+         `Upper CI` = upper.HPD)
+
+color_me <- which(
+    (pairs1$`Lower CI` > 0 & pairs1$`Upper CI` > 0) |
+    (pairs1$`Lower CI` < 0 & pairs1$`Upper CI` < 0)
+  )
+
+
+pairs1 |>
+  kable(booktabs = T) |>
+  kable_styling() |>
+  row_spec(color_me, color = "black",
+           background = "red")
 ```
 
 ```{r AllMassGGplot}
@@ -583,13 +682,16 @@ fit_df |>
                                              jitter.height = 0, dodge.width = 0.75),
              alpha = 0.4)+
   
-  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "blue")+
-  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "Dark Green")+
+  geom_hline(yintercept = hline_aq[["Median_mid50"]], color = "skyblue")+
+  geom_hline(yintercept = hline_mix[["Median_mid50"]], color = "darkcyan")+
+  geom_hline(yintercept = hline_ter[["Median_mid50"]], color = "lightgreen")+
     
   geom_hline(yintercept = hline_aq[["Quant_lower75"]],
-             color = "light blue", lty = 2)+
+             color = "skyblue", lty = 2)+
+  geom_hline(yintercept = hline_mix[["QUant_lower75"]],
+             color = "darkcyan", lty = 2)+
   geom_hline(yintercept = hline_ter[["Quant_lower75"]],
-             color = "light green", lty = 2)+
+             color = "lightgreen", lty = 2)+
   
   xlab("Grouped Layers")+ylab("log-Artifact Mass")+
   labs(fill = "")+
