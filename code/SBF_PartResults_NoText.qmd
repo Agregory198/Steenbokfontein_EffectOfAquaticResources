@@ -83,7 +83,7 @@ scraper_red <- function(L, D, a, b){
 #| warning: false
 
 # Read and clean data
-df_sum24 <- read.csv("../data/AG_Summer2024_06_26_Final.csv") |>
+df_sum24 <- read.csv("../data/AG_Summer2024_SBF_Final.csv") |>
   select(-c('X')) |>
   filter(RAWMATERIAL != "BWA UPPER 1" &
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
@@ -94,7 +94,7 @@ df_sum24 <- read.csv("../data/AG_Summer2024_06_26_Final.csv") |>
   mutate(STRAT = factor(STRAT),
          STRAT_mod = factor(STRAT_mod))
 
-df_sum25 <- read.csv("../data/AG_Summer2025_SBF_final.csv") |>
+df_sum25 <- read.csv("../data/AG_Summer2025_SBF_Final.csv") |>
   filter(RAWMATERIAL != "BWA UPPER 1" &
            RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete")) |>
   mutate(STRAT = ifelse(STRAT == "3a", "3", # combine strat 3a and 3b
@@ -107,7 +107,7 @@ df_sum25 <- read.csv("../data/AG_Summer2025_SBF_final.csv") |>
   select(-c(X))
 
 # student's dataframe
-df_glenda <- read_csv("../data/DataSheet_1.csv")|>
+df_One <- read_csv("../data/DataSheet_1.csv")|>
   mutate(STRAT = tolower(Layer),
          
          PLATFORMWIDTH = parse_number("Platform Width"),
@@ -119,9 +119,9 @@ df_glenda <- read_csv("../data/DataSheet_1.csv")|>
          MAXTHICKNESS = parse_number("Thickness"),
          MASS = parse_number("Mass"))
 
-df_glenda <- df_glenda[1:289,]
+df_One <- df_One[1:289,]
 
-df_glenda_flakes <- df_glenda |>
+df_One_flakes <- df_One |>
   
   add_column(OTHERUNIT = NA, .before = "Raw Material") |>
 
@@ -151,7 +151,7 @@ df_glenda_flakes <- df_glenda |>
   
 
 # student's Dataframe
-df_leano <- read_csv("../data/DataSheet_2.csv") |>
+df_Two <- read_csv("../data/DataSheet_2.csv") |>
   
   rename(SITE = Site, STRAT = Layer, UNIT = Unit, NAMED_ID = `Other Name`,
          RAWMATERIAL = `Raw Material`, CORTEX = `Cortex Percent`,
@@ -167,7 +167,7 @@ df_leano <- read_csv("../data/DataSheet_2.csv") |>
   
   select(-c(`...2`,Notes:Photo))
 
-df_leano_flakes <- df_leano |>
+df_Two_flakes <- df_Two |>
   
   add_column(OTHERUNIT = NA, .before = "RAWMATERIAL") |>
   
@@ -182,11 +182,11 @@ df_leano_flakes <- df_leano |>
 
 
 
-df_leano_flakes <- df_leano_flakes[1:421,] |>
+df_Two_flakes <- df_Two_flakes[1:421,] |>
   relocate(CORTEXTYPE, .before = "ARTIFACTCLASS")
   
 
-df_students <- rbind(df_leano_flakes, df_glenda_flakes)
+df_students <- rbind(df_Two_flakes, df_One_flakes)
 
 
 df <- rbind(df_sum24, df_sum25) |>
