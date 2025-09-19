@@ -1924,6 +1924,8 @@ dev.off()
 ## Adzes
 
 ```{r}
+#| include: false
+
 df_adze <- df |>
   as_tibble() |>
   filter(RETOUCHEDPIECETYPOLOGY == "Adze") |>
