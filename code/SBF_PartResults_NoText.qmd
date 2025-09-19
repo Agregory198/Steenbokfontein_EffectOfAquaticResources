@@ -46,6 +46,7 @@ library(tidybayes)
 # Bayesian models
 library(brms)
 library(emmeans)
+library(loo)
 ```
 
 ```{r ScraperRetouchFormula}
@@ -215,7 +216,8 @@ df <- rbind(df_sum24, df_sum25) |>
   
   filter(RAWMATERIAL %in% c("Quartz", "Quartzite", "Silcrete"),
          CORTEX != "\\",
-         MAXWIDTH < 1250)
+         MAXWIDTH < 1250,
+         MASS < 300)
 
 
 # take average core flake scar length
@@ -548,16 +550,20 @@ dev.off()
 
 ```{r AllMass}
 # design model to look at the relationship between artifact mass and the 50th and 75th percentiles
-fit_df <- df |>
-    mutate(log_MASS = log(MASS))
+# filter by values that caused errors in the models
+fit_df <-df |>
+      group_by(RAWMATERIAL) |>
+      filter(!(RAWMATERIAL == "Silcrete" & MASS > 100) &
+               !(RAWMATERIAL == "Quartzite" & MASS > 170)) |>
+      mutate(log_MASS = log(MASS))
 
 
 # Cretae priors to assign to Bayesian model for two scenarios: grouped and separate layers
 # Gamma prior for grouped layers and Mass
-Gamma_Prior_Mass_Grouped <- prior(normal(3,0.5), class = "Intercept")+
+Gamma_Prior_Mass_Grouped <- prior(normal(3,1), class = "Intercept")+
   
-  prior(normal(2,0.5), class = "b", coef = "STRAT_modMixed")+
-  prior(normal(1,0.5), class = "b", coef = "STRAT_modTerrestrial")+
+  prior(normal(2,1), class = "b", coef = "STRAT_modMixed")+
+  prior(normal(1,1), class = "b", coef = "STRAT_modTerrestrial")+
   
   prior(normal(3,1), class = "b", coef = "RAWMATERIALQuartzite")+
   prior(normal(1,1), class = "b", coef = "RAWMATERIALSilcrete")+
@@ -571,41 +577,41 @@ Gamma_Prior_Mass_Grouped <- prior(normal(3,0.5), class = "Intercept")+
   prior(normal(1,1), class = "b",
         coef = "STRAT_modTerrestrial:RAWMATERIALSilcrete")+
 
-  prior(gamma(2, 0.5), class = "shape")
+  prior(gamma(1.1, 0.15), class = "shape")
 
 # Gamma prior for individual layers and Mass
-Gamma_Prior_Mass_Ind <- prior(normal(3,0.5), class = "Intercept")+
+Gamma_Prior_Mass_Ind <- prior(normal(6,1), class = "Intercept")+
   
-  prior(normal(2,1), class = "b", coef = "STRAT2")+
-  prior(normal(2,1), class = "b", coef = "STRAT3")+
-  prior(normal(1,1), class = "b", coef = "STRAT4a")+
-  prior(normal(1,1), class = "b", coef = "STRAT4b")+
-  prior(normal(1,1), class = "b", coef = "STRAT5")+
+  prior(normal(4,1), class = "b", coef = "STRAT2")+
+  prior(normal(4,1), class = "b", coef = "STRAT3")+
+  prior(normal(3,1), class = "b", coef = "STRAT4a")+
+  prior(normal(3,1), class = "b", coef = "STRAT4b")+
+  prior(normal(3,1), class = "b", coef = "STRAT5")+
   
-  prior(normal(3,0.5), class = "b", coef = "RAWMATERIALQuartzite")+
-  prior(normal(0,1), class = "b", coef = "RAWMATERIALSilcrete")+
-  prior(normal(3,0.5), class = "b",
+  prior(normal(5,1), class = "b", coef = "RAWMATERIALQuartzite")+
+  prior(normal(3,1), class = "b", coef = "RAWMATERIALSilcrete")+
+  prior(normal(5,1), class = "b",
         coef = "STRAT2:RAWMATERIALQuartzite")+
-  prior(normal(0,0.5), class = "b",
+  prior(normal(2,1), class = "b",
         coef = "STRAT2:RAWMATERIALSilcrete")+
-  prior(normal(3,0.5), class = "b",
+  prior(normal(5,1), class = "b",
         coef = "STRAT3:RAWMATERIALQuartzite")+
-  prior(normal(1,1), class = "b",
+  prior(normal(3,1), class = "b",
         coef = "STRAT3:RAWMATERIALSilcrete")+
-  prior(normal(1,1), class = "b",
+  prior(normal(4,1), class = "b",
         coef = "STRAT4a:RAWMATERIALQuartzite")+
-  prior(normal(2,1), class = "b",
+  prior(normal(3,1), class = "b",
         coef = "STRAT4a:RAWMATERIALSilcrete")+
-  prior(normal(1,1), class = "b",
+  prior(normal(4,1), class = "b",
         coef = "STRAT4b:RAWMATERIALQuartzite")+
-  prior(normal(2,1), class = "b",
+  prior(normal(3,1), class = "b",
         coef = "STRAT4b:RAWMATERIALSilcrete")+
-  prior(normal(2,1), class = "b",
+  prior(normal(3,1), class = "b",
         coef = "STRAT5:RAWMATERIALQuartzite")+
-  prior(normal(2,1), class = "b",
+  prior(normal(3,1), class = "b",
         coef = "STRAT5:RAWMATERIALSilcrete")+
   
-  prior(gamma(2, 0.5), class = "shape")
+  prior(gamma(1.1, 0.15), class = "shape")
 ```
 
 ```{r fitAllMass}
@@ -632,6 +638,49 @@ fit_mass_all_ind <- brm(
 )
 ```
 
+```{r}
+#| include: false
+
+
+# Posterior checks for grouped data
+pp_check(fit_mass_all_grouped, type = "dens_overlay_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_mass_all_grouped, type = "stat_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_mass_all_grouped, type = "scatter_avg_grouped",
+         group = "STRAT_mod")
+
+pp_check(fit_mass_all_grouped, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_all_grouped, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_all_grouped, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_mass_all_grouped, moment_match = T)
+plot(loo1)
+
+
+
+# Posterior checks for individual data
+pp_check(fit_mass_all_ind, type = "dens_overlay_grouped", 
+         group = "STRAT")
+pp_check(fit_mass_all_ind, type = "stat_grouped", 
+         group = "STRAT")
+pp_check(fit_mass_all_ind, type = "scatter_avg_grouped",
+         group = "STRAT")
+
+pp_check(fit_mass_all_ind, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_all_ind, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_all_ind, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_mass_all_ind, moment_match = T)
+plot(loo1)
+```
+
 ### Supp 1-2
 
 ```{r tab-AllMassGroup}
@@ -647,7 +696,7 @@ pairs1 <- pairs(emmeans_res) |>
          `Lower CI` = lower.HPD,
          `Upper CI` = upper.HPD)
 
-plot(emmeans_res)
+#plot(emmeans_res)
 supp_tab1 <- pairs1 |>
   
   filter((`Lower CI` < 0 & `Upper CI` < 0) | 
@@ -678,6 +727,43 @@ gtsave(supp_tab1, "../results/tables/Supp1.png")
 
 ```
 
+```{r}
+#| include: false
+
+fit_df |>
+  group_by(STRAT_mod) |>
+  summarize(q75 = quantile(log(MASS), 0.75)) |>
+  slice(rep(1:n(), each = 3)) |>
+  mutate(RAWMATERIAL = rep(c("Quartz", "Quartzite", "Silcrete"), 3)) -> q75
+
+c = 1
+for(i in q75$q75){
+  
+  if(q75$RAWMATERIAL[c] == "Quartz" & q75$STRAT_mod[c] == "Coastal"){
+    hyp = paste0("Intercept < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] == "Quartz" & q75$STRAT_mod[c] != "Coastal"){
+    hyp = paste0("Intercept + STRAT_mod",q75$STRAT_mod[c], " < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] != "Quartz" & q75$STRAT_mod[c] == "Coastal"){
+    hyp = paste0("Intercept + RAWMATERIAL",q75$RAWMATERIAL[c], " < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] != "Quartz" & q75$STRAT_mod[c] != "Coastal"){
+    hyp = paste0("Intercept + STRAT_mod", q75$STRAT_mod[c],
+                 " + RAWMATERIAL", q75$RAWMATERIAL[c],
+                   " + STRAT_mod", q75$STRAT_mod[c],
+                 ":RAWMATERIAL", q75$RAWMATERIAL[c],
+                 " < ",i)
+  }
+  
+  h <- hypothesis(fit_mass_all_grouped, hyp)
+  print(paste("Hypothesis for", hyp, "is", h$hypothesis$Post.Prob))
+  
+  c = c + 1
+}
+
+```
+
 ```{r tab-AllMassInd}
 emmeans_res <- emmeans(fit_mass_all_ind, ~ STRAT*RAWMATERIAL)
 
@@ -691,6 +777,7 @@ pairs1 <- pairs(emmeans_res) |>
          `Upper CI` = upper.HPD)
 
 
+plot(emmeans_res)
 supp_tab2 <- pairs1 |>
   
   filter((`Lower CI` < 0 & `Upper CI`) < 0 | 
@@ -721,8 +808,44 @@ gtsave(supp_tab2, "../results/tables/Supp2.png")
 
 
 # Remove models to expand storage space in R environment
-rm(fit_mass_all_grouped)
-rm(fit_mass_all_ind)
+#rm(fit_mass_all_grouped)
+#rm(fit_mass_all_ind)
+```
+
+```{r}
+#| include: false
+
+fit_df |>
+  group_by(STRAT) |>
+  summarize(q75 = quantile(log(MASS), 0.75)) |>
+  slice(rep(1:n(), each = 3)) |>
+  mutate(RAWMATERIAL = rep(c("Quartz", "Quartzite", "Silcrete"), 6)) -> q75
+
+c = 1
+for(i in q75$q75){
+  
+  if(q75$RAWMATERIAL[c] == "Quartz" & q75$STRAT[c] == "1"){
+    hyp = paste0("Intercept < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] == "Quartz" & q75$STRAT[c] != "1"){
+    hyp = paste0("Intercept + STRAT",q75$STRAT[c], " < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] != "Quartz" & q75$STRAT[c] == "1"){
+    hyp = paste0("Intercept + RAWMATERIAL",q75$RAWMATERIAL[c], " < ",i)
+  }
+  else if(q75$RAWMATERIAL[c] != "Quartz" & q75$STRAT[c] != "1"){
+    hyp = paste0("Intercept + STRAT", q75$STRAT[c],
+                 " + RAWMATERIAL", q75$RAWMATERIAL[c],
+                   " + STRAT", q75$STRAT[c],
+                 ":RAWMATERIAL", q75$RAWMATERIAL[c],
+                 " < ",i)
+  }
+  
+  h <- hypothesis(fit_mass_all_ind, hyp)
+  print(paste("Hypothesis for", hyp, "is", h$hypothesis$Post.Prob))
+  
+  c = c + 1
+}
 ```
 
 ```{r AllMassGGplot}
@@ -926,6 +1049,49 @@ fit_mass_core_ind <- brm(
   iter = 4000,
   seed = 23257788
 )
+```
+
+```{r}
+#| include: false
+
+
+# Posterior checks for grouped data
+pp_check(fit_mass_core_grouped, type = "dens_overlay_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_mass_core_grouped, type = "stat_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_mass_core_grouped, type = "scatter_avg_grouped",
+         group = "STRAT_mod")
+
+pp_check(fit_mass_core_grouped, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_core_grouped, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_core_grouped, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_mass_core_grouped, moment_match = T)
+plot(loo1)
+
+
+
+# Posterior checks for individual data
+pp_check(fit_mass_core_ind, type = "dens_overlay_grouped", 
+         group = "STRAT")
+pp_check(fit_mass_core_ind, type = "stat_grouped", 
+         group = "STRAT")
+pp_check(fit_mass_core_ind, type = "scatter_avg_grouped",
+         group = "STRAT")
+
+pp_check(fit_mass_core_ind, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_core_ind, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_mass_core_ind, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_mass_core_ind, moment_match = T)
+plot(loo1)
 ```
 
 ### Supp 3-4
@@ -1226,6 +1392,49 @@ fit_length_core_ind <- brm(
   iter = 4000,
   seed = 537788
 )
+```
+
+```{r}
+#| include: false
+
+
+# Posterior checks for grouped data
+pp_check(fit_length_core_grouped, type = "dens_overlay_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_length_core_grouped, type = "stat_grouped", 
+         group = "STRAT_mod")
+pp_check(fit_length_core_grouped, type = "scatter_avg_grouped",
+         group = "STRAT_mod")
+
+pp_check(fit_length_core_grouped, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_length_core_grouped, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_length_core_grouped, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_length_core_grouped, moment_match = T)
+plot(loo1)
+
+
+
+# Posterior checks for individual data
+pp_check(fit_length_core_ind, type = "dens_overlay_grouped", 
+         group = "STRAT")
+pp_check(fit_length_core_ind, type = "stat_grouped", 
+         group = "STRAT")
+pp_check(fit_length_core_ind, type = "scatter_avg_grouped",
+         group = "STRAT")
+
+pp_check(fit_length_core_ind, type = "dens_overlay_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_length_core_ind, type = "stat_grouped", 
+         group = "RAWMATERIAL")
+pp_check(fit_length_core_ind, type = "scatter_avg_grouped",
+         group = "RAWMATERIAL")
+
+loo1 <- loo(fit_length_core_ind, moment_match = T)
+plot(loo1)
 ```
 
 ### Supp 5-6
