@@ -4,7 +4,7 @@ execute:
   echo: false
   warning: false
   message: false
-format: docx
+format: html
 editor: visual
 ---
 
@@ -777,7 +777,7 @@ pairs1 <- pairs(emmeans_res) |>
          `Upper CI` = upper.HPD)
 
 
-plot(emmeans_res)
+#plot(emmeans_res)
 supp_tab2 <- pairs1 |>
   
   filter((`Lower CI` < 0 & `Upper CI`) < 0 | 
@@ -804,12 +804,6 @@ supp_tab2 <- pairs1 |>
 
 gtsave(supp_tab2, "../results/tables/Supp2.png")
 
-
-
-
-# Remove models to expand storage space in R environment
-#rm(fit_mass_all_grouped)
-#rm(fit_mass_all_ind)
 ```
 
 ```{r}
@@ -846,6 +840,10 @@ for(i in q75$q75){
   
   c = c + 1
 }
+
+# Remove models to expand storage space in R environment
+rm(fit_mass_all_grouped)
+rm(fit_mass_all_ind)
 ```
 
 ```{r AllMassGGplot}
@@ -1189,7 +1187,9 @@ supp_tab4 <- pairs1 |>
   )
 
 gtsave(supp_tab4, "../results/tables/Supp4.png")
+```
 
+```{r}
 # Remove models to expand storage space in R environment
 rm(fit_mass_core_grouped)
 rm(fit_mass_core_ind)
@@ -1519,7 +1519,9 @@ supp_tab6 <- pairs1 |>
   )
 
 gtsave(supp_tab6, "../results/tables/Supp6.png")
+```
 
+```{r}
 # Remove models to expand storage space in R environment
 rm(fit_length_core_grouped)
 rm(fit_length_core_ind)
