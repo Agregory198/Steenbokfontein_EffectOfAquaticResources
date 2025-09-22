@@ -263,7 +263,7 @@ sbf_un <- read.csv("../data/SBF_ToolType_unmod.csv")
 
 ## Raw material distribution
 
-```{r tab.cap="Count and percentage of the three main lithic categories conditioned by raw material: Cores, Flakes, and Retouched tools. Retouched tool categories contains miscelleneous retouched flakes, backed tools, and scrapers."}
+```{r tab1}
 #| label: tab-one
 
 
@@ -342,7 +342,7 @@ df |>
 
 ```
 
-```{r fig-Figure1, fig.cap="Proportion of three main lithic tool types (cores, flakes, and retouched tools) conditioned by raw material type for layers grouped by diet (A) and all layesr (B). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure5}
 
 png("../results/figures/fig5.png", width = 290, height = 120, units = "mm", res = 300)
 ggarrange(
@@ -533,7 +533,7 @@ df_cortex_boot |>
 rm(df_cortex_boot)
 ```
 
-```{r fig-Figure2, fig.cap="Bar plot that shows the cortical-to-noncortical ratios scaled by artifact's surface area for layers grouped by diet (A) and all layers (B). Low ratio implies greater non-cortical coverage; high ratios imply greater cortical coverage. The error bars reflect a 95% confidence interval derived from bootstrap sampling. Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure6}
 
 png("../results/figures/fig6.png", width = 290, height = 120,
     units = "mm", res = 300)
@@ -765,7 +765,8 @@ for(i in q75$q75){
 ```
 
 ```{r tab-AllMassInd}
-emmeans_res <- emmeans(fit_mass_all_ind, ~ STRAT*RAWMATERIAL)
+emmeans_res <- emmeans(fit_mass_all_ind, ~ STRAT*RAWMATERIAL,
+                       type = "response")
 
 # Pairwise comparisons with Bayesian credible intervals
 
@@ -777,7 +778,7 @@ pairs1 <- pairs(emmeans_res) |>
          `Upper CI` = upper.HPD)
 
 
-#plot(emmeans_res)
+plot(emmeans_res)
 supp_tab2 <- pairs1 |>
   
   filter((`Lower CI` < 0 & `Upper CI`) < 0 | 
@@ -944,7 +945,7 @@ fit_df |>
 
 ```
 
-```{r fig-Figure3, fig.cap="Boxplot of log-mass for layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure7}
 
 png("../results/figures/fig7.png", width = 290, height = 120,
     units = "mm", res = 300)
@@ -1289,7 +1290,7 @@ fit_df |>
   scale_fill_viridis_d() -> Core_mass_freqPlot2
 ```
 
-```{r fig-Figure4, fig.cap="Boxplot of log-mass for only cores in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure8}
 
 png("../results/figures/fig8.png", width = 290, height = 120,
     units = "mm", res = 300)
@@ -1615,7 +1616,7 @@ fit_df |>
   scale_fill_viridis_d() -> Core_length_freqPlot2
 ```
 
-```{r fig-Figure5, fig.cap="Boxplot of the maximum core length in layers grouped by diet (A) and for all layers (B). The dashed lines reflect 75th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). The solid lines reflect the 50th percentile mass for layers associated with auqatic diets (blue) and terrestrial diets (green). Blue labeled layers (1, 2, and 3) reflect Coastal-dominated diets, and the green layers (4a and 4b) reflect terrestrial-dominated diets."}
+```{r fig-Figure9}
 
 png("../results/figures/fig9.png", width = 290, height = 120,
     units = "mm", res = 300)
@@ -1632,7 +1633,7 @@ dev.off()
 
 ## Toolkit composition
 
-```{r fig-Figure6, fig.cap="Percent of retouched tools to lithic density at SBF. Higher formal tools and lower lithic density implies higher mobility; lower formal tools and higher lithic density implies lower mobility. These data suggest layers 1, 2, and 3 are asscoaited with increased mobility and layers 4a and 4b are associated with lower mobility."}
+```{r fig-Figure10}
 
 png("../results/figures/fig10.png", width = 180, height = 120,
     units = "mm", res = 300)
@@ -1707,7 +1708,7 @@ df.flakes |>
 
 ```
 
-```{r fig-Figure7, fig.cap="Flake utility to reduction intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, we would expect greater flake utility nd reduction intensity.s These pattersn fail to support this hypothesis."}
+```{r fig-Figure11}
 
 png("../results/figures/fig11.png", width = 180, height = 120,
     units = "mm", res = 300)
@@ -1752,7 +1753,7 @@ df.retouch |>
 
 ```
 
-```{r fig-Figure8, fig.cap="Flake utility to retouch intensity for quartz, quartzite, and silcrete colored by terrestrial (green) and coaastal (blue) diets. Our initial hypothesis predicts that, as hunter-gatherers focused on coastal resources, flake utility should increase and retouch should decrease. Quartzite and silcrete fail to support are hypothesis, and quartz shows an inverse pattern to our expectations."}
+```{r fig-Figure12}
 
 png("../results/figures/fig12.png", width = 180, height = 120,
     units = "mm", res = 300)
@@ -1811,7 +1812,7 @@ flake.vr |>
   select(STRAT, RAWMATERIAL, V, VR, volume_removed, SDI, SA_Ellipse)-> cores.vr
 ```
 
-```{r fig-Figure9, fig.cap="Core utility to core reduction intensity colored by terrestrial (green) and coaastal (blue) diets. Due to sample size constraints, this figure is based on quartz cores. Our initial hypothesis predicts that as hunter-gatherer exploit coastal resources, core utility and reduction intensity should increase. There is no evidence too support our initial hypothesis."}
+```{r fig-Figure13}
 # Tells us:
 # High reduction intensity and low utility is more mobile
 # High reduction and high utility is sedentary but low reduction and high utility is fully sedentary?
@@ -1891,7 +1892,7 @@ scrap.red <- scrap.red |>
          MASS = df.scrap$MASS)
 ```
 
-```{r fig-Figure10, fig.cap="Scraper utility to retouch intensity for all scrapers at SBF colored by terrestrial (green) and coastal (blue) diets. Our initial hypothesis predicts that as hunter-gatherers focused on coastal resources, scraper utility increases and retouch intensity decreases. This figure shows the opposite pattern than we would expect."}
+```{r fig-Figure14}
 
 png("../results/figures/fig14.png", width = 180, height = 120,
     units = "mm", res = 300)
@@ -1921,7 +1922,7 @@ scrap.red |>
 dev.off()
 ```
 
-## Adzes
+## Additional analysis on Adzes
 
 ```{r}
 #| include: false
