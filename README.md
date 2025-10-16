@@ -6,7 +6,7 @@ This is a multivariate project that examines whether hunter-gatherer technologie
 
 ## Tools Used
 - 'R'
-- 'tidyverse', 'ggplot2', 'gt'
+- 'tidyverse', 'ggplot2', 'gt', 'brms'
 - Quarto
 
 ## Folder Structure
