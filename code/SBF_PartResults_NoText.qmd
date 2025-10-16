@@ -21,7 +21,9 @@ library(ggridges)
 library(cowplot)
 
 library(infer)
-
+#library(rcompanion)
+library(purrr)
+#library(rcompanion)
 library(viridis)
 
 library(scales)
@@ -47,6 +49,8 @@ library(tidybayes)
 library(brms)
 library(emmeans)
 library(loo)
+library(BayesFactor)
+library(posterior)
 ```
 
 ```{r ScraperRetouchFormula}
@@ -223,23 +227,32 @@ df <- rbind(df_sum24, df_sum25) |>
 # take average core flake scar length
 df |>
   dplyr::filter(ARTIFACTCLASS=="Core") |>
-  group_by(RAWMATERIAL)|>
-  dplyr::summarise(a = mean(LENGHTLONGESTFLAKESCAR)) -> df.core_average
+  group_by(RAWMATERIAL, STRAT) |>
+  summarize(Ave_FlakeLength = mean(LENGHTLONGESTFLAKESCAR)) -> core_size
+
 
 # Subset data by flakes and flake variables
-df.flakes <- df |>
+core_bind <- full_join(core_size, df) |>
   filter(ARTIFACTCLASS == "Flake" & COMPLETENESS == "Complete") |>
-  select(any_of(names(df_students))) |>
+  group_by(RAWMATERIAL, STRAT) |>
+  mutate(Utility1 = TECHLENGTH*(TECHLENGTH - 0.5),
+         Utility2 = TECHLENGTH*(TECHLENGTH - 1),
+         Utility3 = TECHLENGTH*(TECHLENGTH - 1.5),
+         Utility4 = TECHLENGTH*(TECHLENGTH - 2),
+         Utility5 = TECHLENGTH*(TECHLENGTH - 2.5),
+         Utility6 = TECHLENGTH*(TECHLENGTH - 3),
+         Utility7 = TECHLENGTH*(TECHLENGTH - 3.5),
+         Utility8 = TECHLENGTH*(TECHLENGTH - 4),
+         Utility9 = TECHLENGTH*(TECHLENGTH - 4.5),
+         Utility10 = TECHLENGTH*(TECHLENGTH - 5),
+         Utility11 = TECHLENGTH*(TECHLENGTH - 5.5),
+         Utility12 = TECHLENGTH*(TECHLENGTH - 6),
+         Utility13 = TECHLENGTH*(TECHLENGTH - 6.5),
+         Utility14 = TECHLENGTH*(TECHLENGTH - 7),
+         
+         Reduction = TECHLENGTH/Ave_FlakeLength) |>
   
-  mutate(Utility = MAXWIDTH*MAXLENGTH,
-         Reduction = ifelse(
-           RAWMATERIAL == "Silcrete", 
-          TECHLENGTH/df.core_average$a[which(df.core_average == "Silcrete")],
-                      ifelse(RAWMATERIAL == "Quartz", 
-          TECHLENGTH/df.core_average$a[which(df.core_average == "Quartz")],
-                       ifelse(RAWMATERIAL == "Quartzite", 
-          TECHLENGTH/df.core_average$a[which(df.core_average == "Quartzite")],
-                              TECHLENGTH/17.70))))
+  select(any_of(names(df_students)), c(Utility1:Reduction)) -> df.flakes
 
 # Subset data by cores and core variables
 df.cores <- df |>
@@ -353,6 +366,154 @@ ggarrange(
 
 dev.off()
 
+```
+
+```{r}
+
+# chi square and fisher's exact test for proportion of artifact class by strat
+df |>
+  count(STRAT, ARTIFACTCLASS, RAWMATERIAL) |>
+  pivot_wider(names_from = ARTIFACTCLASS, values_from = n, values_fill = 0) |>
+  group_by(RAWMATERIAL) |> # 1: Quartz 2: Quartzite; 3: Silcrete
+  group_map(~ {
+    tbl <- .x |>
+      column_to_rownames(var = "STRAT") |>
+      as.matrix()
+      test <- contingencyTableBF(tbl,
+                                 sampleType = "indepMulti",
+                                 fixedMargin = "rows")
+
+  })
+
+contingencyTableBF(tbl, sampleType = "indepMulti", fixedMargin = "rows")
+# chi square and fisher's exact test for proportion of artifact class by strat_mod
+df |>
+  count(STRAT_mod, ARTIFACTCLASS, RAWMATERIAL) |>
+  pivot_wider(names_from = ARTIFACTCLASS, values_from = n, values_fill = 0) |>
+  group_by(RAWMATERIAL) |> # 1: Quartz 2: Quartzite; 3: Silcrete
+  group_map(~ {
+    tbl <- .x |>
+      column_to_rownames(var = "STRAT_mod") |>
+      as.matrix()
+      test <- pairwise.prop.test(tbl)
+      tibble(
+        comparison = test$Comparison,
+        Adj.chisq = test$p.adj.Chisq,
+        Adj.fisher = test$p.adj.Fisher
+      )
+
+  })
+
+
+
+fit_prop <- df |>
+  filter(RAWMATERIAL == "Quartz") |>
+  count(STRAT_mod, ARTIFACTCLASS, RAWMATERIAL) |>
+  pivot_wider(names_from = ARTIFACTCLASS, values_from = n, values_fill = 0) |>
+  mutate(total = Core+Flake+RetouchedTool,
+         y = cbind(Core, Flake, RetouchedTool))
+  
+fit_prop$size = with(fit_prop, Core + Flake + RetouchedTool)
+fit_prop$y = with(fit_prop, cbind(Core, Flake, RetouchedTool))
+
+
+
+fit <- brm(bf(y | trials(size)  ~ 1), data = fit_prop, 
+                family = multinomial())
+
+
+
+
+
+
+
+
+prior <- prior(normal(0, 10), "b", dpar = muy2) +
+    prior(cauchy(0, 1), "Intercept") +
+    prior(normal(0, 2), "Intercept", dpar = muy3)
+
+bform1 <- 
+  bf(mvbind(Flake, Core, RetouchedTool) ~ STRAT_mod) +
+  set_rescor(TRUE)
+
+fit_mat <- fit_prop |>
+  select(Flake, Core, RetouchedTool) |>
+  as.matrix()
+
+
+
+prop_fit1 <- brm(
+  ARTIFACTCLASS ~ STRAT_mod,
+  data = df[which(df$RAWMATERIAL=="Quartz"),],
+  family = categorical(),
+  #prior = priors,
+  cores = getOption("mc.cores", parallel::detectCores()),
+  chains = 2,
+  iter = 3000,
+  warmup = 1000,
+)
+
+draws_prop <- prop_fit1 |> 
+  epred_draws(newdata = df[which(df$RAWMATERIAL=="Quartz"),])
+
+draws_logit <- prop_fit1|>
+  # This gives us counts...
+  epred_draws(newdata = fit_prop)
+  # ...so divide by the original total to get proportions again
+  mutate(.epred_prop = .epred / total)
+
+draws_logit |>
+  ggplot(aes(x = .epred_prop, y = STRAT_mod, fill = STRAT_msod)) +
+  stat_halfeye() +
+  scale_x_continuous(labels = label_percent()) +
+  #scale_fill_manual(values = c(clr_usa, clr_mex)) +
+  guides(fill = "none") +
+  labs(x = "Proportion of students who read comic books often",
+       y = NULL)
+
+
+
+
+###################
+library(MCMCpack)
+
+# Prior: uniform Dirichlet
+alpha <- c(1,1,1)
+
+# Sample posterior for time 1
+p_time1 <- rdirichlet(10000, fit_prop$y[1,] + alpha) # coastal
+p_time2 <- rdirichlet(10000, fit_prop$y[2,] + alpha) # mixed
+p_time3 <- rdirichlet(10000, fit_prop$y[3,] + alpha) # terrestrial
+
+# Difference between categories
+diff1 <- p_time2 - p_time1
+diff2 <- p_time3 - p_time1
+diff3 <- p_time3 - p_time2
+
+# Probability each category increased
+apply(diff1, 2, function(x) mean(x > 0))
+apply(diff2, 2, function(x) mean(x > 0))
+apply(diff3, 2, function(x) mean(x > 0))
+
+
+
+
+
+
+c <- tibble(counts = c(62, 454, 74,
+                       88, 953, 116),
+            STRAT = c(rep("Coastal", 3),
+                      rep("Mixed", 3)))
+
+    fit_proportions <- brm(
+      counts ~ 1 + STRAT, # Intercept-only model for proportions
+      data = c,
+      family = dirichlet(), # Using identity link for proportions
+      #prior = priors,
+      chains = 1, # Number of MCMC chains
+      iter = 2000, # Number of iterations per chain
+      warmup = 1000 # Warmup iterations
+    )
 ```
 
 ```{r CortexGGplot}
@@ -1678,50 +1839,386 @@ dev.off()
 
 ## Flake utility and reduction intensity
 
-```{r flakeUtRed}
-#| warning: false
-#| message: false
+### Grouped Layers
 
-df.flakes |>
-  select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
-  group_by(STRAT_mod, RAWMATERIAL) |>
-  summarize(Utility_ave = mean(Utility),
-            Red_ave= mean(Reduction),
-            
-            Est_ut = seq(150, 700, 10),
-            Est_red = Est_ut^35) |>
-  ggplot(aes(x = Red_ave, y = Utility_ave, 
-                   color = STRAT_mod, label = STRAT_mod))+
-    #geom_point(aes(x = Est_red, y = Est_ut))+
-    geom_point(size = 2)+
-    facet_wrap(~RAWMATERIAL)+
+```{r}
+# Gamma prior
+my_prior <-
+
+  # Intercept
+  prior(normal(0, 1), class = Intercept)+
+  
+  # Polynomial factor 1
+  prior(normal(0, 1), class = b, coef = "polyReduction_s21")+
+
+  # Polynomial factor 2
+  prior(normal(0, 0.5), class = b, coef = "polyReduction_s22")+
+
+  # Group-level SDs
+  prior(exponential(1), class = sd)+
+
+  # Gamma shape
+  prior(exponential(1), class = shape)
+
+
   
   
-    xlab("Reduction Intensity")+ylab("Utility")+
-    theme(legend.title = element_blank())+
-    guides(color = "none")+
-    scale_color_manual(values = c("Coastal" = "skyblue", 
-                                  "Mixed" = "darkcyan",
-                                "Terrestrial" = "lightgreen")) -> FlakeUtRed1
-###########################
+# Run Bayesian model with varying slopes
+bayes_ut1 <- brm(Utility_s ~ 1 + poly(Reduction_s, 2) +
+                   (0 + poly(Reduction_s, 2) | STRAT_mod/RAWMATERIAL),
+              data = Bayes_red1,
+              family = Gamma(link = "log"),
+              iter = 4000,
+              chains = 2,
+              seed = 111,
+              control = list(adapt_delta = 0.95),
+              prior=my_prior,
+              cores = getOption("mc.cores", 14))
+
+```
+
+```{r}
+# Validate model with posterior checks
+
+pp_check(bayes_ut1, type = "dens_overlay")
+pp_check(bayes_ut1, type = "stat")
+
+pp_check(bayes_ut1, type = "scatter_avg_grouped", group = "RAWMATERIAL")
+pp_check(bayes_ut1, type = "scatter_avg_grouped", group = "STRAT_mod")
+
+
+
+loo1 <- loo(bayes_ut1)
+plot(loo1)
+```
+
+```{r}
+x_seq <- seq(min(Bayes_red1$Reduction_s, na.rm = TRUE),
+             max(Bayes_red1$Reduction_s, na.rm = TRUE),
+             length.out = 100)
+
+# All combinations of grouping levels
+newdat <- expand_grid(
+  Reduction_s = x_seq,
+  STRAT_mod = unique(Bayes_red1$STRAT_mod),
+  RAWMATERIAL = unique(Bayes_red1$RAWMATERIAL)
+)
+
+# Get fitted values (posterior draws of the mean)
+preds <- fitted(
+  bayes_ut1,       # your Gamma(log) model
+  newdata = newdat,
+  re_formula = NULL,    # include group-level effects
+  summary = FALSE       # return full posterior draws
+)
+
+# Add to the grid and summarize
+pred_summary <- newdat |>
+  bind_cols(as_tibble(t(preds))) |>
+  pivot_longer(cols = starts_with("V"), values_to = "Utility_pred") |>
+  group_by(STRAT_mod, RAWMATERIAL, Reduction_s) |>
+  summarise(
+    mean = mean(Utility_pred),
+    lower = quantile(Utility_pred, 0.025),
+    upper = quantile(Utility_pred, 0.975),
+    .groups = "drop"
+  )
+
+
+ggplot(pred_summary, aes(x = Reduction_s, y = mean, color = STRAT_mod)) +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = STRAT_mod), alpha = 0.2, color = NA) +
+  facet_wrap(~ RAWMATERIAL, scales = "free_y") +
+  labs(
+    title = "Predicted Utility by Reduction level",
+    subtitle = "Posterior mean and 95% credible interval per Raw Material and Strat Category",
+    x = "Reduction (standardized)",
+    y = "Predicted Utility"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+# Assign sequence to procude slope values
+x_seq <- seq(min(Bayes_red1$Reduction_s),
+             max(Bayes_red1$Reduction_s),
+             length.out = 50)
+
+# Group specific slopes
+post <- spread_draws(
+  bayes_ut1,
+  b_polyReduction_s21, b_polyReduction_s22,
+  # Quartz
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s22]`,
+  
+  # Quartzite
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Quartzite,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Quartzite,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Quartzite,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Quartzite,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartzite,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartzite,polyReduction_s22]`,
+  
+  # Silcrete
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Silcrete,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Coastal_Silcrete,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Silcrete,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Mixed_Silcrete,polyReduction_s22]`,
+  
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Silcrete,polyReduction_s21]`,
+  `r_STRAT_mod:RAWMATERIAL[Terrestrial_Silcrete,polyReduction_s22]`
+)
+
+# Determine the optimal surplus based on where tangent = 0
+post |>
+  mutate(draw = row_number()) |>
+  tidyr::crossing(Reduction_s = x_seq) |>
+  mutate(
+    # Quartz
+    x_Quartz_C = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s22]`)),
+    
+    x_Quartz_M = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s22]`)),
+    
+    x_Quartz_T = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s22]`)),
+    
+    # QUartzite
+    x_Quartzite_C = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Coastal_Quartzite,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Coastal_Quartzite,polyReduction_s22]`)),
+    
+    x_Quartzite_M = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Mixed_Quartzite,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Mixed_Quartzite,polyReduction_s22]`)),
+    
+    x_Quartzite_T = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartzite,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartzite,polyReduction_s22]`)),
+    
+    # Silcrete
+    x_Silcrete_C = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Coastal_Silcrete,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Coastal_Silcrete,polyReduction_s22]`)),
+    
+    x_Silcrete_M = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Mixed_Silcrete,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Mixed_Silcrete,polyReduction_s22]`)),
+    
+    x_Silcrete_T = (b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Terrestrial_Silcrete,polyReduction_s21]`)/
+            -1*(2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Terrestrial_Silcrete,polyReduction_s22]`)),
+  ) |>
+  
+  
+  select(starts_with("x")) |>
+  pivot_longer(x_Quartz_C:x_Silcrete_T,
+               names_to = "layer", values_to = "x_value") |>
+
+  ggplot(aes(x = x_value, y = layer, fill = layer)) +
+  stat_halfeye(.width = 0.95,
+               point_interval = mean_qi) +
+  scale_fill_manual(
+    values = c("x_Quartz_T" = "forestgreen",
+               "x_Quartz_M" = "darkmagenta",
+               "x_Quartz_C" = "skyblue",
+               
+               "x_Quartzite_T" = "forestgreen",
+               "x_Quartzite_M" = "darkmagenta",
+               "x_Quartzite_C" = "skyblue",
+               
+               "x_Silcrete_T" = "forestgreen",
+               "x_Silcrete_M" = "darkmagenta",
+               "x_Silcrete_C" = "skyblue")) +
+  
+  
+  labs(x = "Posterior Estimate for Reduction Intensity", y = "Group") +
+  
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        text = element_text(size = 15),
+        legend.position = "none")+
+  guides(color = "none") +
+  scale_y_discrete(
+    labels = c("x_Quartz_T" = "Quartz:Terrestrial",
+               "x_Quartz_M" = "Quartz:Mixed",
+               "x_Quartz_C" = "Quartz:Coastal",
+               
+               "x_Quartzite_T" = "Quartzite:Terrestrial",
+               "x_Quartzite_M" = "Quartzite:Mixed",
+               "x_Quartzite_C" = "Quartzite:Coastal",
+               
+               "x_Silcrete_T" = "Silcrete:Terrestrial",
+               "x_Silcrete_M" = "Silcrete:Mixed",
+               "x_Silcrete_C" = "Silcrete:Coastal")
+  )
+  
+  
+
+```
+
+```{r}
+
+# Compute slope values
+slope_draws <- post |>
+  mutate(draw = row_number()) |>
+  tidyr::crossing(Reduction_s = x_seq) |>
+  mutate(
+    slope_Quartz_C = ((b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s21]`) +
+            2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Coastal_Quartz,polyReduction_s22]`)*Reduction_s),
+    
+    slope_Quartz_M = ((b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s21]`) +
+            2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Mixed_Quartz,polyReduction_s22]`)*Reduction_s),
+    
+    slope_Quartz_T = ((b_polyReduction_s21 +
+                         `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s21]`) +
+            2 * (b_polyReduction_s22 +
+                   `r_STRAT_mod:RAWMATERIAL[Terrestrial_Quartz,polyReduction_s22]`)*Reduction_s),
+  )
+
+# Summarize and visualize slopes
+slope_summary <- slope_draws |>
+  select(c(starts_with("slope"), Reduction_s)) |>
+  pivot_longer(slope_Quartz_C:slope_Quartz_T, names_to = "groups", values_to = "slopes") |>
+  group_by(groups, Reduction_s) |>
+  summarise(
+    mean = mean(slopes),
+    lower = quantile(slopes, 0.025),
+    upper = quantile(slopes, 0.975),
+    .groups = "drop"
+  )
+
+
+ggplot(slope_summary, aes(x = Reduction_s, y = mean, color = groups)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = groups), alpha = 0.2, color = NA) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(y = "Instantaneous slope (d log(Utility)/d Reduction)",
+       title = "Group-specific slope curves",
+       color = "Group", fill = "Group") +
+  theme_bw()
+
+```
+
+```{r}
+# Test slope differences
+compare_slope <- slope_draws |>
+  mutate(diff1 = slope_Quartz_C - slope_Quartz_T,
+         diff2 = slope_Quartz_C - slope_Quartz_T,
+         diff3 = slope_Quartz_M - slope_Quartz_T,
+         
+         m1 = mean(diff1 > 0),
+         m2 = mean(diff2 > 0),
+         m3 = mean(diff3 > 0))
+
+compare_slope |>
+  select(m1:m3) |>
+  distinct() |>
+  print()
+
+
+pairwise_diffs <- slope_draws |>
+  select(c(starts_with("slope"), Reduction_s)) |>
+  pivot_longer(slope_Quartz_C:slope_Quartz_T, names_to = "groups", values_to = "slopes") |>
+  group_by(groups) |>
+  summarise(mean_slope = mean(slopes),
+            lower = quantile(slopes, 0.025),
+            upper = quantile(slopes, 0.975))
 
 
 ```
 
+```{r}
+compare_slope |>
+  select(starts_with("diff")) |>
+  pivot_longer(diff1:diff3,
+               names_to = "layer", values_to = "slope") |>
+  
+  ggplot(aes(x = slope, y = layer, fill = layer)) +
+  stat_halfeye(.width = 0.90,
+               point_interval = mean_qi)
+  scale_fill_manual(
+    values = c("slope_Ter" = "forestgreen",
+               "slope_Mix" = "darkmagenta",
+               "slope_Aq" = "skyblue")) +
+  
+  
+  labs(x = "Posterior Slope Estimate", y = "Phase") +
+  
+  theme_minimal()+
+  theme(legend.title = element_blank(),
+        text = element_text(size = 20),
+        legend.position = "none")+
+  guides(color = "none") +
+  scale_y_discrete(
+    labels = c("slope_Ter" = "Terrestrial",
+               "slope_Mix" = "Mixed",
+               "slope_Aq" = "Aquatic")
+  )
+```
+
+### Old Junk
+
 ```{r fig-Figure11}
 
+library(ggforce)
 png("../results/figures/fig11.png", width = 180, height = 120,
     units = "mm", res = 300)
 
+# Create elliptical confidence intervals
+ellipse_data <- data.frame(
+      x0 = 5,  # X-coordinate of the center
+      y0 = 5,  # Y-coordinate of the center
+      a = 2,   # Length of the major axis
+      b = 1,   # Length of the minor axis
+      angle = pi/4 # Angle of rotation in radians (e.g., 45 degrees)
+)
+
 df.flakes |>
-  select(STRAT, STRAT_mod, RAWMATERIAL, Utility, Reduction) |>
+  select(STRAT, STRAT_mod, RAWMATERIAL, Utility1, Reduction) |>
   group_by(STRAT, RAWMATERIAL) |>
   na.omit()|>
-  summarize(Utility_ave = mean(Utility),
-            Red_ave = mean(Reduction)) |>
+  summarize(Utility_ave = mean(Utility1),
+            Red_ave = mean(Reduction),
+            
+            Utility_sd = sd(Utility1),
+            Red_sd = sd(Reduction)) |>
+  
   ggplot(aes(x = Red_ave, y = Utility_ave, 
                    color = STRAT, label = STRAT))+
     geom_point(size = 2)+
+    geom_ellipse(aes(x0 = Red_ave, y0 = Utility_ave,
+                     a = Red_sd, b = Utility_sd,
+                     angle = 0))+
     facet_wrap(~RAWMATERIAL)+
     geom_text(aes(fontface = 2),hjust = 1.1, vjust = -0.2)+
   
